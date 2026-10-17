@@ -1,0 +1,21 @@
+# Safety rules used by src/jarvis/safety/policy.py.
+# Risk only goes UP: the final level is the max of kind, keyword and flag matches.
+# Unknown action kinds default to yellow (confirm).
+
+kinds:
+  green: [launch_app, open_url, hotkey, type_text, click, scroll, read, search, play_media, wait]
+  yellow: [send, submit_form, delete_file, move_file, place_order]
+  payment: [pay]
+  red: [enter_password, enter_otp, login, solve_captcha, change_system_setting]
+
+# Matched as whole words/phrases (case-insensitive) against the action's target (UI label).
+keywords:
+  yellow: [send, submit, delete, remove, place order, buy now, confirm order]
+  payment: [pay now, proceed to pay, place your order and pay, complete payment, make payment]
+  red: [password, otp, one-time password, upi pin, cvv, sign in, log in, verify you are human, captcha]
+
+flags:
+  red: [password_field, otp_field, captcha_detected]
+
+# One-tap checkout: a payment action is refused unless all of these are in action.args.
+payment_required_fields: [item, quantity, price, address, payment_method]

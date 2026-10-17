@@ -1,0 +1,62 @@
+"""The single path from an Action to execution: policy → (confirm/handoff) → executor."""
+
+from __future__ import annotations
+
+from typing import Protocol
+
+from jarvis.models import Action, ActionResult
+from jarvis.safety.confirm import Confirmer, build_confirm_prompt, build_handoff_message
+from jarvis.safety.policy import Decision, SafetyPolicy
+from jarvis.telemetry.logging import get_logger
+from jarvis.telemetry.metrics import timed
+
+log = get_logger(__name__)
+
+
+class Executor(Protocol):
+    async def execute(self, action: Action) -> ActionResult: ...
+
+
+class ActionRunner:
+    """Executors are never called directly — always through run_action()."""
+
+    def __init__(self, policy: SafetyPolicy, executor: Executor, confirmer: Confirmer) -> None:
+        self.policy = policy
+        self.executor = executor
+        self.confirmer = confirmer
+
+    async def run_action(self, action: Action) -> ActionResult:
+        with timed(f"action:{action.kind}") as t:
+            result = await self._run(action)
+        return result.model_copy(update={"duration_ms": t.ms})
+
+    async def _run(self, action: Action) -> ActionResult:
+        check = self.policy.check(action)
+        log.info(
+            "policy kind=%s target=%r risk=%s decision=%s reasons=%s",
+            action.kind,
+            action.target,
+            check.risk.name,
+            check.decision,
+            check.reasons,
+        )
+
+        if check.decision == Decision.REFUSE:
+            return ActionResult(ok=False, error="refused", observation="; ".join(check.reasons))
+
+        if check.decision == Decision.HANDOFF:
+            done = await self.confirmer.handoff(build_handoff_message(action, check))
+            if not done:
+                return ActionResult(ok=False, error="user_cancelled")
+            return ActionResult(ok=True, observation="completed by user")
+
+        if check.decision == Decision.CONFIRM and not await self.confirmer.confirm(
+            build_confirm_prompt(action, check)
+        ):
+            return ActionResult(ok=False, error="user_declined")
+
+        try:
+            return await self.executor.execute(action)
+        except Exception as exc:  # executor bugs become results, never crash the agent
+            log.exception("executor failed for %s", action.kind)
+            return ActionResult(ok=False, error=f"exception: {exc}")
