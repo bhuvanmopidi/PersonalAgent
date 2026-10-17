@@ -1,0 +1,8 @@
+# Eval tasks — one per capability. Runner added in Phase 16.
+# Each entry:
+#   - id: open_notepad
+#     command: "open notepad"
+#     expected_tier: 1
+#     check: "window title contains 'Notepad'"
+#     max_latency_ms: 500
+tasks: []

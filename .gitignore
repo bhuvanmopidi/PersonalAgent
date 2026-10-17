@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Environments
+.venv/
+.env
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data — never commit user data
+logs/
+*.db
+*.db-*
+*.sqlite
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
