@@ -4,7 +4,8 @@ Context for Claude Code. Read this fully before writing code.
 
 ## 0. Workflow (how we work on this repo)
 - Work is split into small **phases** (roadmap below in §10).
-- Per phase: Claude proposes an action plan → user decides → Claude implements → Claude gives a **phase report** → user reviews the code manually and accepts → **user commits & pushes**.
+- Per phase: Claude proposes an action plan → user decides → Claude implements → Claude updates **documentation** → Claude gives a **phase report** → user reviews the code manually and accepts → **user commits & pushes**.
+- **Documentation (every phase, in `docs/`):** add `docs/phases/phase-NN-<name>.md` (goal, what was built, how it works, design decisions, how to run/test, limitations); update `docs/architecture.md` and the relevant reference docs (e.g. `docs/safety.md`) when behaviour changes; update `docs/README.md` index and the README status line.
 - **Phase report** covers: what was built (files + purpose) · how it works · why those choices · how to run/test · limitations / next-phase hooks · suggested commit message.
 - **Git rule:** Claude never runs `git init/add/commit/push/remote` or creates GitHub repos. Claude only suggests the commands; the user runs them.
 - Claude never switches Claude Code modes on its own; the user controls modes.
@@ -174,4 +175,4 @@ PersonalAgent/
 - Every risky action goes through `safety/policy.py` — no bypass paths.
 - Measure latency per stage (`telemetry.metrics.timed`); optimize for speed first.
 - Prefer small, testable modules; add an eval task for every new capability.
-- Run before handing a phase over: `uv run pytest`, `uv run ruff check .`, `uv run mypy src`.
+- Run before handing a phase over: `uv run pytest`, `uv run ruff check .`, `uv run mypy src tests`.
