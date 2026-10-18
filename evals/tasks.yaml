@@ -37,3 +37,19 @@ tasks:
       check: "'Volume 24%' spoken; first audio after prewarm", max_latency_ms: 150 }
   - { id: tts_failure_spoken, command: "open blahblah", expected_intent: open_app, expected_tier: 1,
       check: "failure sentence spoken, start phrase cut off", max_latency_ms: 400 }
+  # ---- voice in (Phase 4) — spoken, measured from end of speech ----
+  - { id: voice_open_app, spoken: "Hey Jarvis, open Spotify", expected_intent: open_app,
+      expected_tier: 1, check: "transcript 'open spotify'; Spotify opens", max_latency_ms: 1200 }
+  - { id: voice_one_breath, spoken: "Hey Jarvis open notepad (no pause)", expected_intent: open_app,
+      expected_tier: 1, check: "command not cut off after the wake word", max_latency_ms: 1200 }
+  - { id: voice_push_to_talk, spoken: "<ctrl+alt+j> volume 30", expected_intent: volume_set,
+      expected_tier: 1, check: "works without the wake word", max_latency_ms: 1200 }
+  - { id: voice_stop, spoken: "stop (while a task runs, no wake word)", expected_intent: control,
+      expected_tier: 0, check: "task cancelled, speech stops", max_latency_ms: 1200 }
+  - { id: voice_confirm_yes, spoken: "yes (after a confirmation prompt)", expected_intent: control,
+      expected_tier: 0, check: "action proceeds", max_latency_ms: 1200 }
+  - { id: voice_unclear_is_no, spoken: "hmm … what (after a confirmation prompt)",
+      expected_intent: control, expected_tier: 0, check: "asked again once, then cancelled",
+      max_latency_ms: 25000 }
+  - { id: voice_false_wake, spoken: "Hey Travis / ordinary conversation", expected_intent: none,
+      expected_tier: 0, check: "does not wake", max_latency_ms: 0 }

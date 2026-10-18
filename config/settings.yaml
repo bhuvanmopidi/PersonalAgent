@@ -4,6 +4,7 @@ log_level: INFO
 
 hotkeys:
   kill: esc
+  push_to_talk: "<ctrl>+<alt>+j"    # talk without the wake word; "" disables
 
 router:
   embedding_match_threshold: 0.85   # Tier-2 skill match (Phase 14)
@@ -13,6 +14,22 @@ tts:
   engine: piper                     # piper | sapi (built-in Windows voice) | none
   voice: en_US-lessac-medium        # jarvis voices download
   speed: 1.0                        # >1 faster, <1 slower
+
+listen:
+  wake_word: hey_jarvis             # bundled openWakeWord model
+  wake_threshold: 0.5               # raise if it wakes by mistake, lower if it misses you
+  vad_threshold: 0.5
+  silence_ms: 700                   # pause that ends a command
+  no_speech_timeout_s: 4            # woke up but you said nothing
+  max_utterance_s: 15
+  wake_sound: true                  # short beep when "Hey Jarvis" is heard
+  partials: true                    # live transcript while you speak (GPU only)
+
+stt:
+  model: small.en                   # on the GPU (RTX 4050: ~0.2 s per command)
+  cpu_model: base.en                # fallback when CUDA isn't available
+  device: auto                      # auto | cuda | cpu
+  hotwords: [lofi, Jarvis, volume, brightness, mute, unmute]   # + app/site names automatically
 
 llm:
   provider: anthropic               # swappable: anthropic | ollama (Phase 7)

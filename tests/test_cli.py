@@ -10,6 +10,9 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert __version__ in capsys.readouterr().out
 
 
-def test_run_starts(capsys: pytest.CaptureFixture[str]) -> None:
-    cli(["run"])
-    assert "starting" in capsys.readouterr().err
+@pytest.mark.parametrize("command", ["run", "listen-test", "do", "repl"])
+def test_subcommands_have_help(command: str, capsys: pytest.CaptureFixture[str]) -> None:
+    # `run` itself opens the mic and loads models — covered by the desktop tests instead
+    with pytest.raises(SystemExit):
+        cli([command, "--help"])
+    assert "usage" in capsys.readouterr().out

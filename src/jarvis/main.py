@@ -1,4 +1,4 @@
-"""CLI entry: jarvis do "…" | repl | say | voices | apps | demo-safety | run."""
+"""CLI entry: jarvis run | listen-test | do "…" | repl | say | voices | apps | demo-safety."""
 
 from __future__ import annotations
 
@@ -16,12 +16,22 @@ if TYPE_CHECKING:  # heavy modules are imported lazily so `jarvis --version` sta
 log = get_logger("jarvis")
 
 
-async def run() -> None:
-    """Main service loop. The voice loop is wired in Phase 4; use `jarvis repl` meanwhile."""
+async def run(verbose: bool, mute: bool) -> None:
+    """Voice mode: wake word / push-to-talk → command → action, mic live during tasks."""
+    from jarvis.voice.runtime import run_voice
+
     settings = load_settings()
-    setup_logging(settings.log_level)
+    setup_logging("INFO" if verbose else "WARNING")
     log.info("Jarvis %s starting (llm=%s)", __version__, settings.llm.provider)
-    log.info("Voice loop arrives in Phase 4 — try `jarvis repl` for typed commands.")
+    await run_voice(settings, mute=mute)
+
+
+async def listen_test(verbose: bool) -> None:
+    from jarvis.voice.runtime import listen_test as run_listen_test
+
+    settings = load_settings()
+    setup_logging("INFO" if verbose else "WARNING")
+    await run_listen_test(settings)
 
 
 async def demo_safety() -> None:
@@ -125,7 +135,13 @@ def cli(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="jarvis", description="Voice PC agent for Windows")
     parser.add_argument("--version", action="version", version=f"jarvis {__version__}")
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("run", help="start the agent")
+    p_run = sub.add_parser("run", help='voice mode: say "Hey Jarvis, open Spotify"')
+    p_run.add_argument("-v", "--verbose", action="store_true", help="show policy/debug logs")
+    p_run.add_argument("--mute", action="store_true", help="don't speak")
+    p_listen = sub.add_parser(
+        "listen-test", help="check the mic: shows what Jarvis hears, does nothing"
+    )
+    p_listen.add_argument("-v", "--verbose", action="store_true")
     p_do = sub.add_parser("do", help='run one typed command, e.g. jarvis do "open notepad"')
     p_do.add_argument("text", nargs="+")
     p_do.add_argument("-v", "--verbose", action="store_true", help="show policy/debug logs")
@@ -145,8 +161,14 @@ def cli(argv: list[str] | None = None) -> None:
     sub.add_parser("demo-safety", help="run fake actions through the safety layer")
     args = parser.parse_args(argv)
 
-    if args.command == "run":
-        asyncio.run(run())
+    if args.command in ("run", "listen-test"):
+        try:
+            if args.command == "run":
+                asyncio.run(run(args.verbose, args.mute))
+            else:
+                asyncio.run(listen_test(args.verbose))
+        except KeyboardInterrupt:
+            print("\nBye.")
     elif args.command == "do":
         raise SystemExit(0 if asyncio.run(do(" ".join(args.text), args.verbose, args.mute)) else 1)
     elif args.command == "repl":

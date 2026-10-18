@@ -59,8 +59,14 @@ flows (Phase 6).
 | `Confirmer` (Protocol) | `confirm(prompt) -> bool`, `handoff(message) -> bool` |
 | `TerminalConfirmer` | Asks in the terminal without blocking the event loop (`asyncio.to_thread`) |
 | `ScriptedConfirmer` | Pre-set answers for tests and evals; records every prompt |
+| `SpokenConfirmer` | Speaks the prompt, then asks the inner confirmer (Phase 3) |
+| `VoiceConfirmer` (`voice/session.py`) | Takes the answer from your next utterance (Phase 4) |
 
-Voice and on-screen confirmers will implement the same protocol in later phases.
+**Voice answers default to NO.** `parse_yes_no` needs a clear yes or no; a reply with both ("don't
+send it") or neither is unclear. Unclear → asked once more → still unclear, or 20 s of silence →
+cancelled. Handoffs (OTP, login, CAPTCHA) wait up to 10 minutes for "done" or "cancel". While
+Jarvis reads a prompt aloud the mic ignores open-mode speech, so it can't answer itself. An
+on-screen confirmer comes with the Tauri UI.
 
 ## Kill switch (`safety/killswitch.py`)
 
@@ -68,6 +74,8 @@ Voice and on-screen confirmers will implement the same protocol in later phases.
 - The global hook (pynput) is active **only while a task runs**, so normal Esc use is unaffected.
 - Keys the agent itself sends are flagged by Windows as *injected* and ignored, so the agent can't kill itself.
 - The key comes from `config/settings.yaml` → `hotkeys.kill`.
+- Saying **"stop"** (or "cancel", "never mind"…) while a task runs triggers the same switch; the
+  result reads `stopped by voice`. No wake word is needed while a task runs.
 
 ## Redaction (`safety/redact.py`)
 

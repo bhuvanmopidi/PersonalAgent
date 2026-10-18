@@ -89,6 +89,18 @@ The agent speaks the intent's description while the action runs, the result for 
 any failure. Confirmations are spoken through `SpokenConfirmer`. Details:
 [phases/phase-03-tts.md](phases/phase-03-tts.md).
 
+## Voice in (built in Phase 4)
+
+```
+Microphone (80 ms frames) ─► ListenerCore: wake word / push-to-talk → record → VAD end-of-speech
+                          ─► Listener: Whisper (GPU small.en ≈ 90 ms) → Heard(text)
+                          ─► VoiceSession: answer to a pending confirmation? "stop"? → kill switch
+                                           otherwise → Agent.handle(text) as a background task
+```
+
+While a task runs the mic is in "open" mode — "stop" and "yes/no" need no wake word — except while
+Jarvis itself is speaking. Details: [phases/phase-04-voice-in.md](phases/phase-04-voice-in.md).
+
 ## Cross-cutting pieces
 
 | Piece | File | Purpose |
@@ -105,4 +117,5 @@ any failure. Confirmations are spoken through `SpokenConfirmer`. Details:
 | Models, safety policy, confirmations, kill switch, redaction, ActionRunner | ✅ Phase 1 |
 | Regex router, Tier-1 OS tools (apps, URLs, volume, brightness, folders, files, lock), typed CLI | ✅ Phase 2 |
 | Text-to-speech: Piper + SAPI fallback, speak-while-acting, spoken confirmations | ✅ Phase 3 |
-| Voice input, browser, desktop app flows, AI agents, skills, memory | Planned |
+| Voice input: wake word, push-to-talk, VAD, Whisper (GPU), voice confirmations, "stop" | ✅ Phase 4 |
+| Browser, desktop app flows, AI agents, skills, memory | Planned |

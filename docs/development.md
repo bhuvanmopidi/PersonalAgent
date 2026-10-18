@@ -7,6 +7,8 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 uv python install 3.12
 uv sync
 uv run jarvis voices download     # Piper voice, ~60 MB (optional: falls back to Windows SAPI)
+# Whisper small.en (~480 MB) downloads on the first `jarvis run` / `listen-test`.
+# GPU: needs an NVIDIA driver; cuBLAS comes from the nvidia-cublas-cu12 package. No GPU → CPU base.en.
 ```
 
 In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → *Python: Select Interpreter*).
@@ -16,7 +18,8 @@ In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → 
 | Command | What it does |
 |---|---|
 | `uv run jarvis --version` | Print the version |
-| `uv run jarvis run` | Start the agent (a stub until the voice loop is added) |
+| `uv run jarvis run [-v] [--mute]` | Voice mode: "Hey Jarvis, …" or Ctrl+Alt+J; "stop" cancels |
+| `uv run jarvis listen-test [-v]` | Mic check: prints transcripts and timings, executes nothing |
 | `uv run jarvis repl [-v] [--mute]` | Type commands in a loop (`-v` shows policy logs) |
 | `uv run jarvis do "open notepad" [--mute]` | Run one command |
 | `uv run jarvis say "hello" [--engine sapi]` | Speak a sentence; prints load and time-to-first-audio |

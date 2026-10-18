@@ -15,6 +15,7 @@ DEFAULT_SETTINGS_PATH = CONFIG_DIR / "settings.yaml"
 
 class HotkeySettings(BaseModel):
     kill: str = "esc"
+    push_to_talk: str = "<ctrl>+<alt>+j"  # pynput hotkey syntax; "" disables
 
 
 class RouterSettings(BaseModel):
@@ -33,12 +34,33 @@ class TTSSettings(BaseModel):
     speed: float = Field(default=1.0, gt=0.25, le=3.0)
 
 
+class ListenSettings(BaseModel):
+    wake_word: str = "hey_jarvis"  # bundled openWakeWord model
+    wake_threshold: float = Field(default=0.5, ge=0.05, le=0.99)
+    vad_threshold: float = Field(default=0.5, ge=0.05, le=0.99)
+    silence_ms: int = Field(default=700, ge=200, le=3000)  # pause that ends a command
+    no_speech_timeout_s: float = Field(default=4.0, gt=0)  # woke up but nothing said
+    max_utterance_s: float = Field(default=15.0, gt=0)
+    wake_sound: bool = True  # short beep when the wake word is heard
+    partials: bool = True  # live transcript while you speak (GPU only)
+
+
+class STTSettings(BaseModel):
+    model: str = "small.en"  # used on the GPU
+    cpu_model: str = "base.en"  # used when CUDA isn't available
+    device: Literal["auto", "cuda", "cpu"] = "auto"
+    # extra words Whisper should favour (app/site names from aliases.yaml are added automatically)
+    hotwords: list[str] = Field(default_factory=list)
+
+
 class Settings(BaseModel):
     log_level: str = "INFO"
     hotkeys: HotkeySettings = HotkeySettings()
     router: RouterSettings = RouterSettings()
     llm: LLMSettings = LLMSettings()
     tts: TTSSettings = TTSSettings()
+    listen: ListenSettings = ListenSettings()
+    stt: STTSettings = STTSettings()
 
 
 def load_settings(path: Path = DEFAULT_SETTINGS_PATH) -> Settings:

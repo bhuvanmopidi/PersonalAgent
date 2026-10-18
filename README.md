@@ -4,8 +4,8 @@ Speak a task; Jarvis does it on your PC like a human would — across the browse
 Fast paths first (instant intents → learned skills), a general accessibility-tree LLM agent for new
 tasks, and a vision fallback for everything else. Local-first, with human checkpoints for risky actions.
 
-> Status: Phase 3 done (typed Tier-1 commands; Jarvis speaks while acting with a local Piper voice).
-> Next: Phase 4, voice input.
+> Status: Phase 4 done — fully voice-controlled Tier-1 commands ("Hey Jarvis, open Spotify"),
+> spoken replies, voice confirmations and "stop". Next: Phase 5, browser via CDP.
 > Docs: [docs/](docs/README.md)
 
 ## Setup
@@ -20,7 +20,8 @@ uv sync
 uv run jarvis voices download      # local Piper voice (~60 MB); optional, falls back to Windows SAPI
 
 # 3. Run
-uv run jarvis --version
+uv run jarvis run                  # voice: "Hey Jarvis, open Spotify" (or Ctrl+Alt+J, then speak)
+uv run jarvis listen-test          # mic check: shows what it hears, does nothing
 uv run jarvis repl                 # type commands: "open spotify", "volume 30", "find my resume"
 uv run jarvis do "play lofi on youtube"
 uv run jarvis demo-safety          # see the safety layer in action

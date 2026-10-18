@@ -5,7 +5,10 @@ description = "Voice-controlled computer-use agent for Windows"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "faster-whisper>=1.2.1",
     "numpy>=2.5.4",
+    "nvidia-cublas-cu12>=12.9.2.10 ; sys_platform == 'win32'",
+    "openwakeword>=0.4.0",
     "piper-tts>=1.8.0",
     "psutil>=7.2.2",
     "pycaw>=20260927",
@@ -51,7 +54,10 @@ strict = true
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["pycaw.*", "screen_brightness_control.*", "sounddevice", "win32com.*", "pythoncom"]
+module = [
+    "pycaw.*", "screen_brightness_control.*", "sounddevice", "win32com.*", "pythoncom",
+    "openwakeword.*", "openwakeword", "faster_whisper.*", "faster_whisper",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

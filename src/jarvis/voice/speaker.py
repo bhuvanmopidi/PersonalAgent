@@ -37,6 +37,11 @@ class Speaker:
     def enabled(self) -> bool:
         return self.engine is not None
 
+    @property
+    def is_speaking(self) -> bool:
+        """True while speech is being produced or played (the mic uses this to ignore Jarvis)."""
+        return self._task is not None and not self._task.done() and not self._stop.is_set()
+
     async def prewarm(self) -> None:
         if isinstance(self.engine, LazyEngine):
             await asyncio.to_thread(self.engine.prewarm)

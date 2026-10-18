@@ -45,6 +45,7 @@ class KillSwitch:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._task: asyncio.Task[Any] | None = None
         self._killed = False
+        self._killed_by = key
 
     async def guard(self, coro: Coroutine[Any, Any, T]) -> T:
         """Run coro; if the kill key is pressed meanwhile, cancel it and raise Killed."""
@@ -60,18 +61,23 @@ class KillSwitch:
             return await task
         except asyncio.CancelledError:
             if self._killed:
-                raise Killed(f"stopped by '{self.key}'") from None
+                raise Killed(f"stopped by {self._killed_by}") from None
             raise
         finally:
             listener.stop()
             self._task = None
             self._loop = None
 
-    def trigger(self) -> None:
-        """Thread-safe: called from the keyboard-hook thread."""
+    @property
+    def active(self) -> bool:
+        return self._task is not None
+
+    def trigger(self, by: str | None = None) -> None:
+        """Thread-safe: called from the keyboard-hook thread, or by voice ("stop")."""
         loop, task = self._loop, self._task
         if loop is None or task is None:
             return
         self._killed = True
+        self._killed_by = by or f"'{self.key}'"
         with contextlib.suppress(RuntimeError):  # loop already closed
             loop.call_soon_threadsafe(task.cancel)
