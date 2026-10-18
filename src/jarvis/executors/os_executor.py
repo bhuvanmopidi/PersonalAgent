@@ -67,6 +67,7 @@ class OSExecutor:
         files: Files,
         opener: Callable[[str], None] = os.startfile,
         locker: Callable[[], None] | None = None,
+        url_opener: Callable[[str], Awaitable[ActionResult]] | None = None,
     ) -> None:
         from jarvis.tiers.instant.system import lock_screen
 
@@ -78,6 +79,7 @@ class OSExecutor:
         )
         self._open = opener
         self._lock = locker or lock_screen
+        self._url_opener = url_opener  # websites open in the Jarvis Chrome window when set
         self._handlers: dict[str, Callable[[Action], Awaitable[ActionResult]]] = {
             "launch_app": self._launch_app,
             "close_app": self._close_app,
@@ -102,6 +104,8 @@ class OSExecutor:
         if plan is None:
             what = {"app": "an app", "web": "a website"}.get(prefer, "an app or site")
             return fail("not_found", f"I couldn't find {what} called '{action.target}'")
+        if plan.kind == "url" and self._url_opener is not None:
+            return await self._url_opener(plan.value)
         self.launcher.launch(plan)
         return ok(f"Opened {plan.display}")
 

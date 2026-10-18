@@ -1,0 +1,50 @@
+# YouTube: selectors and shortcuts used by src/jarvis/apps/youtube_flow.py.
+# When YouTube changes its page, fix it here — not in code.
+
+search_url: "https://www.youtube.com/results?search_query={query}"   # {query} is URL-encoded
+
+# ad before a video: ask (Jarvis asks "Skip it?") | skip (always) | play (never touch ads)
+# "Hey Jarvis, always skip ads" / "never skip ads" / "ask about ads" changes it for the session.
+ads: ask
+ask_timeout_s: 8            # no answer → the ad keeps playing
+
+selectors:
+  result: "ytd-video-renderer"            # one search result (a normal video)
+  result_link: "a#video-title"
+  player: "#movie_player"
+  ad_showing_class: "ad-showing"          # set on the player while an ad plays
+  skip_button: ".ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button"
+  video: "video.html5-main-video, #movie_player video, video"
+  duration: "ytd-thumbnail-overlay-time-status-renderer"   # "29:33" on the thumbnail
+
+# results that aren't a plain video: skip them
+# (playlists/mixes use other elements — ytd-radio-renderer, yt-lockup-view-model — so the `result`
+#  selector never matches them. Don't filter "&list=": YouTube adds its auto "radio" queue to
+#  ordinary video links too.)
+skip_inside: ["ytd-ad-slot-renderer", "ytd-reel-shelf-renderer", "ytd-promoted-video-renderer"]
+skip_href: ["/shorts/", "/live"]
+skip_badges: ["LIVE", "Upcoming", "Premiere"]
+# Live streams often have NO "LIVE" badge in results (e.g. "lofi hip hop radio") — but they never
+# have a duration label. So only pick results showing one.
+require_duration: true
+
+# Pages YouTube may send the tab to instead of what we asked for — say what's wrong at once
+# instead of waiting for results that will never come.
+error_pages:
+  - match: "youtube.com/oops"
+    message: "YouTube showed an account error. Sign in with a personal Gmail in the Jarvis Chrome window, or sign out there, then try again."
+  - match: "accounts.google.com"
+    message: "YouTube wants you to sign in. Do it in the Jarvis Chrome window, then try again."
+  - match: "consent.youtube.com"
+    message: "YouTube is asking for cookie consent. Accept it in the Jarvis Chrome window, then try again."
+  - match: "consent.google.com"
+    message: "Google is asking for cookie consent. Accept it in the Jarvis Chrome window, then try again."
+
+shortcuts:                  # YouTube's own keyboard shortcuts (keyboard over mouse)
+  next: "Shift+N"
+  fullscreen: "f"
+
+timeouts_s:
+  results: 10               # search results to appear
+  start: 15                 # video (not ad) to start playing
+  ads_max: 120              # longest we wait through ads before handing back

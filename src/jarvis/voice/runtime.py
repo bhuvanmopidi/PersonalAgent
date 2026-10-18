@@ -67,19 +67,26 @@ async def run_voice(settings: Settings, mute: bool = False) -> None:
     agent = Agent.create(settings, confirmer=confirmer, mute=mute)
     confirmer.speaker = agent.speaker
 
-    print("Loading speech models…")
-    stt_s, _ = await asyncio.gather(_prewarm_stt(stt), agent.prewarm())
+    print("Loading speech models and the Jarvis Chrome window…")
+    stt_s, _ = await asyncio.gather(_prewarm_stt(stt), agent.prewarm(launch_browser=True))
     print(f"  whisper {stt.model_name} on {stt.device} ({stt_s:.1f} s)")
+    if agent.browser is not None:
+        print(f"  browser {'connected' if agent.browser.connected else 'not available'}")
 
     listener = build_listener(settings, stt, lambda: agent.speaker.is_speaking)
     listener.partials = settings.listen.partials and stt.device == "cuda"
     session = VoiceSession(agent, listener, confirmer, settings.listen.wake_sound)
     ptt = settings.hotkeys.push_to_talk
-    with push_to_talk_hotkey(ptt, listener.push_to_talk):
-        hint = f" or press {pretty_combo(ptt)}" if ptt else ""
-        print(f'Ready. Say "Hey Jarvis"{hint}, then your command. Esc stops a task; Ctrl+C quits.')
-        await agent.speaker.say("Ready.")  # never say the wake word itself — it could wake us
-        await session.run()
+    try:
+        with push_to_talk_hotkey(ptt, listener.push_to_talk):
+            hint = f" or press {pretty_combo(ptt)}" if ptt else ""
+            print(
+                f'Ready. Say "Hey Jarvis"{hint}, then your command. Esc stops a task; Ctrl+C quits.'
+            )
+            await agent.speaker.say("Ready.")  # never say the wake word itself — it could wake us
+            await session.run()
+    finally:
+        await agent.close()
 
 
 async def listen_test(settings: Settings) -> None:

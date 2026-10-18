@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><title>Lofi Girl - YouTube</title><script src="fakevideo.js"></script></head>
+<body>
+  <div id="movie_player"><video class="html5-main-video"></video></div>
+  <script>
+    const v = fakeVideo(document.querySelector("video"));
+    window.keys = [];
+    document.addEventListener("keydown", (e) => window.keys.push((e.shiftKey ? "Shift+" : "") + e.key));
+    setTimeout(() => v.play(), 100);   // autoplay starts shortly after load
+  </script>
+</body></html>

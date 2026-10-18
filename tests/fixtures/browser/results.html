@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><title>lofi - YouTube</title></head>
+<body>
+  <!-- what a YouTube results page contains, reduced to what youtube.yaml selectors look at -->
+  <ytd-ad-slot-renderer>
+    <ytd-video-renderer><a id="video-title" title="Sponsored: Buy Headphones" href="watch.html?v=ad">Sponsored</a></ytd-video-renderer>
+  </ytd-ad-slot-renderer>
+  <ytd-video-renderer><a id="video-title" title="lofi short" href="/shorts/abc123">lofi short</a></ytd-video-renderer>
+  <ytd-video-renderer>
+    <a id="video-title" title="lofi hip hop radio" href="watch.html?v=live">lofi hip hop radio</a>
+    <div class="badge">LIVE</div>
+  </ytd-video-renderer>
+  <!-- like real YouTube now: a 24/7 stream with no LIVE badge — only the missing duration gives it away -->
+  <ytd-video-renderer><a id="video-title" title="lofi radio 24/7" href="watch.html?v=live2">lofi radio 24/7</a></ytd-video-renderer>
+  <ytd-radio-renderer><a id="video-title" title="Mix - Lofi" href="watch.html?v=x&amp;list=RD1">mix</a></ytd-radio-renderer>
+  <!-- like real YouTube: an ordinary video link carrying the auto "radio" queue -->
+  <ytd-video-renderer><a id="video-title" title="Lofi Girl - beats to study to" href="watch.html?v=real&amp;list=RDreal&amp;">Lofi Girl - beats to study to</a><ytd-thumbnail-overlay-time-status-renderer>1:02:03</ytd-thumbnail-overlay-time-status-renderer></ytd-video-renderer>
+  <ytd-video-renderer><a id="video-title" title="Second video" href="watch.html?v=second">Second video</a><ytd-thumbnail-overlay-time-status-renderer>3:25</ytd-thumbnail-overlay-time-status-renderer></ytd-video-renderer>
+  <script>
+    // ?watch=watch_ad.html makes every result lead to the page with an ad
+    const watch = new URLSearchParams(location.search).get("watch");
+    if (watch) document.querySelectorAll("a#video-title").forEach(
+      (a) => a.setAttribute("href", a.getAttribute("href").replace("watch.html", watch)));
+  </script>
+</body></html>

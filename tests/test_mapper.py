@@ -11,12 +11,20 @@ def test_render_plain_and_url() -> None:
 
 def test_youtube_search_action() -> None:
     router = RegexRouter.from_yaml()
-    intent = router.route("play blinding lights on youtube")
+    intent = router.route("search blinding lights on youtube")
     assert intent is not None
     action = to_action(router.specs[intent.name], intent)
     assert action.kind == "open_url"
     assert action.target == "https://www.youtube.com/results?search_query=blinding+lights"
     assert action.description == "Searching YouTube for blinding lights"
+
+
+def test_youtube_play_action() -> None:
+    router = RegexRouter.from_yaml()
+    intent = router.route("play blinding lights on youtube")
+    assert intent is not None
+    action = to_action(router.specs[intent.name], intent)
+    assert (action.kind, action.target) == ("youtube_play", "blinding lights")
 
 
 def test_volume_action_uses_default() -> None:

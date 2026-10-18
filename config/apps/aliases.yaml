@@ -52,5 +52,18 @@ sites:
   chatgpt: https://chatgpt.com
   claude: https://claude.ai
   stack overflow: https://stackoverflow.com
+  docs: https://docs.google.com
+  google docs: https://docs.google.com
+  drive: https://drive.google.com
+  google drive: https://drive.google.com
+  sheets: https://sheets.google.com
+  google sheets: https://sheets.google.com
+  slides: https://slides.google.com
+  google slides: https://slides.google.com
 
-prefer_web: [gmail, google, amazon, flipkart, github, linkedin, chatgpt, claude, stack overflow]
+# Every website opens in the Jarvis Chrome window. Installed browser web apps (Chrome/Edge PWAs like
+# YouTube, Gmail, Docs) count as websites: their site above is opened instead — so add an entry here
+# for any new web app you install. prefer_web: sites that also beat a same-named *desktop* app
+# (e.g. GitHub Desktop).
+prefer_web: [youtube, yt, gmail, google, amazon, flipkart, github, linkedin, chatgpt, claude,
+             stack overflow]

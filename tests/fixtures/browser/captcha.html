@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><title>Just a moment...</title></head>
+<body>
+  <p>Checking your browser.</p>
+  <iframe id="challenge" src="https://www.google.com/recaptcha/api2/anchor?k=test"></iframe>
+  <script>
+    // the "user" solves it after a moment (the test controls this via ?solve=ms)
+    const ms = new URLSearchParams(location.search).get("solve");
+    if (ms) setTimeout(() => document.getElementById("challenge").remove(), Number(ms));
+  </script>
+</body></html>

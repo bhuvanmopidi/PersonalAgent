@@ -7,6 +7,8 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 uv python install 3.12
 uv sync
 uv run jarvis voices download     # Piper voice, ~60 MB (optional: falls back to Windows SAPI)
+uv run playwright install chromium # test browser for the browser tests (~120 MB)
+uv run jarvis browser setup        # sign in inside the Jarvis Chrome window (separate from your Chrome)
 # Whisper small.en (~480 MB) downloads on the first `jarvis run` / `listen-test`.
 # GPU: needs an NVIDIA driver; cuBLAS comes from the nvidia-cublas-cu12 package. No GPU → CPU base.en.
 ```
@@ -25,9 +27,11 @@ In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → 
 | `uv run jarvis say "hello" [--engine sapi]` | Speak a sentence; prints load and time-to-first-audio |
 | `uv run jarvis voices list` / `download [name]` | Piper voices (default voice from settings) |
 | `uv run jarvis apps [name] [--refresh]` | List apps / see what a name resolves to / rebuild the index |
+| `uv run jarvis browser setup` | Open the Jarvis Chrome window (no remote control) to sign in once |
+| `uv run jarvis browser status` | Chrome found? Jarvis Chrome running? Control port connected? |
 | `uv run jarvis demo-safety` | Run fake actions through the safety layer |
 | `uv run pytest` | Run the unit tests (no side effects) |
-| `uv run pytest -m desktop` | Real-desktop smoke tests (opens Notepad, changes and restores volume) |
+| `uv run pytest -m desktop` | Real-desktop smoke tests (Notepad, volume, voice pipeline, real Chrome + YouTube) |
 | `uv run ruff check .` / `uv run ruff format .` | Lint / format |
 | `uv run mypy src tests` | Strict type check |
 | `uv add <pkg>` / `uv add --dev <pkg>` | Add a dependency |
@@ -44,13 +48,15 @@ src/jarvis/
   models.py        Intent, Action, ActionResult, RiskLevel
   agent.py         Agent.handle(text): router → mapper → ActionRunner → executor
   paths.py         %LOCALAPPDATA%\JarvisAgent locations
-  safety/          policy, confirm, killswitch, redact, demo
+  safety/          policy, confirm, killswitch, redact, captcha, demo
   router/          regex_router.py (Tier-1 intents)
-  executors/       base.py (ActionRunner), os_executor.py
+  executors/       base.py (ActionRunner), router.py (KindRouter), os_executor.py,
+                   browser_session.py (Jarvis Chrome over CDP), browser.py (BrowserExecutor)
+  apps/            youtube_flow.py
   tiers/instant/   app_index, apps, system, files, mapper
   voice/           tts (Piper, SAPI), audio (output), speaker, voices (download)
   telemetry/       logging, metrics
-  planner/ tiers/{skills,structured,vision}/ apps/ memory/   (later phases)
+  planner/ tiers/{skills,structured,vision}/ memory/   (later phases)
 docs/              this documentation
 evals/             eval tasks (Phase 16 runner)
 tests/             pytest suite (conftest.py has shared fixtures)

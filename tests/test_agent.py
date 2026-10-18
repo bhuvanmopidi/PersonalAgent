@@ -38,7 +38,7 @@ def make_agent(ok: bool = True) -> tuple[Agent, RecordingExecutor, FakeEngine]:
 
 async def test_text_to_action_end_to_end() -> None:
     agent, executor, _ = make_agent()
-    outcome = await agent.handle("Hey Jarvis, play lofi on YouTube")
+    outcome = await agent.handle("Hey Jarvis, search lofi on YouTube")
     assert outcome.result.ok
     assert executor.actions[0].target.endswith("search_query=lofi")
     assert outcome.route_ms < 50  # Tier-1 routing must be near-instant

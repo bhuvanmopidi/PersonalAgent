@@ -16,5 +16,6 @@
 | 2 | Tier-1 instant tools | ✅ Done | [phase-02-instant.md](phases/phase-02-instant.md) |
 | 3 | Voice out (TTS) | ✅ Done | [phase-03-tts.md](phases/phase-03-tts.md) |
 | 4 | Voice in (wake word, VAD, Whisper) | ✅ Done | [phase-04-voice-in.md](phases/phase-04-voice-in.md) |
-| 5 | Browser via CDP | ⏳ Next | — |
-| 6–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |
+| 5 | Browser via CDP (YouTube, tabs, CAPTCHA handoff, page risk) | ✅ Done | [phase-05-browser.md](phases/phase-05-browser.md) |
+| 7 | LLM layer (before 6, Amazon needs it) | ⏳ Next | — |
+| 6, 8–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |

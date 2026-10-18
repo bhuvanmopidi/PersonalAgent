@@ -141,6 +141,37 @@ def test_resolve_app_vs_website(
     assert plan is not None and plan.value == value
 
 
+WEB_APPS = [  # installed browser web apps (PWAs) — they run in the normal, uncontrollable profile
+    AppEntry(name="YouTube", app_id="Chrome._crx_agimnkijcamfeangaknmldooml"),
+    AppEntry(name="Docs", app_id="Chrome._crx_mpnpojknpmnjdcgaaiekajbnjb"),
+    AppEntry(name="Google Drive", app_id="Chrome._crx_aghbiahbpaeidepookljebhfak"),
+    AppEntry(name="Notion", app_id="MSEdge._crx_notion"),
+    AppEntry(name="Spotify", app_id="SpotifyAB.Spotify!Spotify"),  # a real desktop app
+]
+
+
+@pytest.mark.parametrize(
+    ("query", "prefer", "url"),
+    [
+        ("youtube", "auto", "https://www.youtube.com"),
+        ("youtube", "app", "https://www.youtube.com"),  # even "youtube app": it's a website
+        ("docs", "auto", "https://docs.google.com"),
+        ("google drive", "auto", "https://drive.google.com"),
+    ],
+)
+def test_web_apps_open_as_websites(query: str, prefer: Prefer, url: str) -> None:
+    launcher = AppLauncher(load_aliases(), Loader(AppIndex(WEB_APPS)), opener=lambda _: None)
+    plan = launcher.resolve(query, prefer)
+    assert plan is not None and (plan.kind, plan.value) == ("url", url)
+
+
+def test_web_app_without_known_site_is_never_launched() -> None:
+    launcher = AppLauncher(load_aliases(), Loader(AppIndex(WEB_APPS)), opener=lambda _: None)
+    assert launcher.resolve("notion") is None  # don't open it in the normal profile
+    spotify = launcher.resolve("spotify")  # desktop apps are unaffected
+    assert spotify is not None and spotify.kind == "app"
+
+
 @pytest.mark.parametrize(
     ("query", "prefer"),
     [

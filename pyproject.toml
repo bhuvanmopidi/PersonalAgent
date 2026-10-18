@@ -10,6 +10,7 @@ dependencies = [
     "nvidia-cublas-cu12>=12.9.2.10 ; sys_platform == 'win32'",
     "openwakeword>=0.4.0",
     "piper-tts>=1.8.0",
+    "playwright>=1.64.0",
     "psutil>=7.2.2",
     "pycaw>=20260927",
     "pydantic>=2.7",

@@ -31,6 +31,12 @@ class AppEntry(BaseModel):
     name: str
     app_id: str
 
+    @property
+    def is_web_app(self) -> bool:
+        """An installed browser web app (Chrome/Edge PWA, e.g. YouTube, Gmail). It's a website
+        running in your normal browser profile — Jarvis opens the site in its own window instead."""
+        return "_crx_" in self.app_id
+
 
 def best_match(
     query: str, names: list[str], scorer: Callable[..., float] = fuzz.WRatio

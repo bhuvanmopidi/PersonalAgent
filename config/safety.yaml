@@ -5,7 +5,8 @@
 kinds:
   green:
     [launch_app, close_app, open_url, open_folder, find_file, set_volume, set_brightness,
-     lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait]
+     lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait,
+     youtube_play, media_key, browser_nav, set_ad_policy]
   yellow: [send, submit_form, delete_file, move_file, place_order]
   payment: [pay]
   red: [enter_password, enter_otp, login, solve_captcha, change_system_setting]
@@ -25,6 +26,22 @@ keywords:
 
 flags:
   red: [password_field, otp_field, captcha_detected]
+
+# Page context: where a browser action happens raises its risk (never lowers it).
+# Checked against action.page_url, and against the target for url_kinds (the target IS a URL).
+url_kinds: [open_url]
+url_rules:
+  payment:
+    path_keywords: [/checkout, /payment, /payments, /pay/, /buy/, /gp/buy, /placeorder, /order/confirm]
+    hosts: [razorpay.com, payu.in, paytm.com, ccavenue.com, billdesk.com, cashfree.com, juspay.in,
+            phonepe.com, paypal.com, checkout.stripe.com]
+
+# "Verify you are human" checks: never solved by the agent — detected, then handed to you.
+captcha:
+  iframe_hosts: [google.com/recaptcha, recaptcha.net, hcaptcha.com, challenges.cloudflare.com,
+                 arkoselabs.com, funcaptcha.com]
+  phrases: [verify you are human, verify you're human, i'm not a robot, i am not a robot,
+            are you a robot, unusual traffic from your computer]
 
 # One-tap checkout: a payment action is refused unless all of these are in action.args.
 payment_required_fields: [item, quantity, price, address, payment_method]

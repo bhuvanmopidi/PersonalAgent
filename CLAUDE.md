@@ -100,7 +100,7 @@ memory(key, value, source, updated_at)   -- "contact:arjun" → "arjun@gmail.com
 User controls: history panel (view/delete), pause memory, forget everything.
 
 ## 7. App-specific notes
-- **Browser (Chrome):** user launches Chrome with `--remote-debugging-port=9222`; Playwright `connect_over_cdp`. Google blocks logins in automated browsers, so always reuse the real profile.
+- **Browser (Chrome):** Chrome 136+ refuses `--remote-debugging-port` on its default data folder (all the user's normal profiles), so Jarvis launches Chrome with a **separate data folder** (`%LOCALAPPDATA%\JarvisAgent\chrome-profile`) + `--remote-debugging-port=9222` and uses Playwright `connect_over_cdp`. The user signs in there once via `jarvis browser setup` (opened *without* the debug port, since Google blocks sign-in in controlled browsers). Never headless; never copy cookies from the real profile. **User rule: every website opens in the Jarvis Chrome window** — including installed browser web apps (Chrome/Edge PWAs: their site is opened instead) — and never silently in the default browser (Edge) or a normal profile; if Chrome can't start, say so.
 - **Amazon:** search box `#twotabsearchtextbox`; results `div[data-component-type='s-search-result']`; LLM picks best of top 5 → confirm (one-tap checkout, §5) → Pay → user enters OTP / UPI PIN.
 - **Gmail (UI):** Compose `div[gh='cm']`, To `input[aria-label='To recipients']`, Subject `input[name='subjectbox']`, Body `div[aria-label='Message Body']`, attach via `set_input_files` on `input[type='file'][name='Filedata']`, wait for attachment to show before send, Send `Ctrl+Enter`.
 - **Spotify (desktop UI):** launch → `Ctrl+L`/`Ctrl+K` focus search (or `spotify:search:<q>`) → type → click Top result play via UIA/vision → verify now-playing bar.
@@ -156,7 +156,7 @@ PersonalAgent/
 | 3 | Voice out | Piper TTS, speak-while-acting |
 | 4 | Voice in | openWakeWord + Silero VAD + streaming faster-whisper → router |
 | 5 | Browser via CDP | Playwright CDP, YouTube flow, CAPTCHA handoff |
-| 6 | Amazon flow | search → LLM pick → one-tap checkout |
+| 6 | Amazon flow (**built after 7** — needs the LLM) | search → LLM pick → one-tap checkout |
 | 7 | LLM provider interface | PydanticAI, Anthropic first, Ollama stub |
 | 8 | Gmail flow | compose/attach/read-back/confirm/send |
 | 9 | Spotify via UIA | pywinauto + `spotify:search:` |

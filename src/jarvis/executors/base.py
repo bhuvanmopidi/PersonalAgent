@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from jarvis.models import Action, ActionResult
@@ -17,13 +18,23 @@ class Executor(Protocol):
     async def execute(self, action: Action) -> ActionResult: ...
 
 
+Annotator = Callable[[Action], Awaitable[Action]]
+
+
 class ActionRunner:
     """Executors are never called directly — always through run_action()."""
 
-    def __init__(self, policy: SafetyPolicy, executor: Executor, confirmer: Confirmer) -> None:
+    def __init__(
+        self,
+        policy: SafetyPolicy,
+        executor: Executor,
+        confirmer: Confirmer,
+        annotate: Annotator | None = None,
+    ) -> None:
         self.policy = policy
         self.executor = executor
         self.confirmer = confirmer
+        self.annotate = annotate  # adds context the policy needs (e.g. the current page URL)
 
     async def run_action(self, action: Action) -> ActionResult:
         with timed(f"action:{action.kind}") as t:
@@ -31,6 +42,8 @@ class ActionRunner:
         return result.model_copy(update={"duration_ms": t.ms})
 
     async def _run(self, action: Action) -> ActionResult:
+        if self.annotate is not None:
+            action = await self.annotate(action)
         check = self.policy.check(action)
         log.info(
             "policy kind=%s target=%r risk=%s decision=%s reasons=%s",

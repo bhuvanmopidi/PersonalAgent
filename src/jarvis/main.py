@@ -1,4 +1,4 @@
-"""CLI entry: jarvis run | listen-test | do "…" | repl | say | voices | apps | demo-safety."""
+"""CLI entry: jarvis run | listen-test | do | repl | say | voices | apps | browser | demo-safety."""
 
 from __future__ import annotations
 
@@ -56,9 +56,12 @@ async def do(text: str, verbose: bool, mute: bool) -> bool:
     settings = load_settings()
     setup_logging("INFO" if verbose else "WARNING")
     agent = Agent.create(settings, mute=mute)
-    outcome = await agent.handle(text)
-    _print_outcome(outcome)
-    await agent.speaker.wait()  # let it finish speaking before the process exits
+    try:
+        outcome = await agent.handle(text)
+        _print_outcome(outcome)
+        await agent.speaker.wait()  # let it finish speaking before the process exits
+    finally:
+        await agent.close()
     return outcome.result.ok
 
 
@@ -68,16 +71,18 @@ async def repl(verbose: bool, mute: bool) -> None:
     settings = load_settings()
     setup_logging("INFO" if verbose else "WARNING")
     agent = Agent.create(settings, mute=mute)
-    prewarm = asyncio.create_task(agent.prewarm())
+    prewarm = asyncio.create_task(agent.prewarm())  # connects to Jarvis Chrome if it's open
     print("Jarvis (typed mode). Type a command, or 'exit'. Esc stops a running task.")
-    while True:
-        text = (await asyncio.to_thread(input, "> ")).strip()
-        if text.lower() in {"exit", "quit", "bye"}:
-            agent.speaker.stop()
-            break
-        if text:
-            await prewarm
-            _print_outcome(await agent.handle(text))
+    try:
+        while True:
+            text = (await asyncio.to_thread(input, "> ")).strip()
+            if text.lower() in {"exit", "quit", "bye"}:
+                break
+            if text:
+                await prewarm
+                _print_outcome(await agent.handle(text))
+    finally:
+        await agent.close()
 
 
 async def say(text: str, engine: str | None) -> None:
@@ -116,6 +121,63 @@ def voices(action: str, name: str | None) -> None:
         return
     print(f"Downloading {voice} …")
     print(f"Saved to {v.download(voice)}")
+
+
+def browser(action: str) -> None:
+    import json
+    import subprocess
+    import urllib.request
+
+    from jarvis.executors.browser_session import (
+        cdp_ready,
+        chrome_args,
+        find_chrome,
+        jarvis_chrome_processes,
+        profile_dir,
+    )
+
+    settings = load_settings().browser
+    chrome = find_chrome(settings.chrome_path)
+    profile = profile_dir(settings)
+    running = jarvis_chrome_processes(profile)
+
+    if action == "status":
+        port = settings.cdp_port
+        print(f"Chrome:        {chrome or 'NOT FOUND (set browser.chrome_path)'}")
+        print(f"Jarvis folder: {profile}  (separate from your normal Chrome profiles)")
+        print(f"Running:       {'yes' if running else 'no'}")
+        if cdp_ready(port):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=2) as r:
+                tabs = [t for t in json.load(r) if t.get("type") == "page"]
+            print(f"Control port:  {port} — connected, {len(tabs)} tab(s) open")
+        elif running:
+            print("Control port:  closed — this window was opened by `jarvis browser setup`;")
+            print("               close it and Jarvis will reopen it with control on.")
+        else:
+            print(f"Control port:  {port} — Jarvis starts Chrome on the first browser command")
+        return
+
+    # setup: open the Jarvis folder WITHOUT remote control, so sign-in pages behave normally
+    if chrome is None:
+        print(
+            "Google Chrome wasn't found. Install it, or set browser.chrome_path in settings.yaml."
+        )
+        return
+    if running and cdp_ready(settings.cdp_port):
+        print("The Jarvis Chrome window is open with remote control on (Google may block sign-in).")
+        print("Close it, then run `jarvis browser setup` again.")
+        return
+    if running:
+        print("The Jarvis Chrome window is already open for setup — sign in there, then close it.")
+        return
+    urls = ["https://accounts.google.com", "https://www.youtube.com"]
+    flags = getattr(subprocess, "DETACHED_PROCESS", 0)
+    subprocess.Popen(chrome_args(chrome, profile, None, urls), creationflags=flags, close_fds=True)
+    print("Opened the Jarvis Chrome window (a separate Chrome data folder:")
+    print(f"  {profile})")
+    print("1. Sign in to the sites you want Jarvis to use: Google/YouTube, Gmail, Amazon, …")
+    print("2. Close the window when you're done. Logins are remembered.")
+    print("Your normal Chrome profiles are not touched, and Jarvis can't control them.")
 
 
 def apps(query: str | None, refresh: bool) -> None:
@@ -158,6 +220,8 @@ def cli(argv: list[str] | None = None) -> None:
     p_apps = sub.add_parser("apps", help="list installed apps, or test what a name resolves to")
     p_apps.add_argument("query", nargs="?")
     p_apps.add_argument("--refresh", action="store_true", help="rebuild the app index")
+    p_browser = sub.add_parser("browser", help="the Jarvis Chrome window: setup (sign in) | status")
+    p_browser.add_argument("action", choices=["setup", "status"])
     sub.add_parser("demo-safety", help="run fake actions through the safety layer")
     args = parser.parse_args(argv)
 
@@ -179,6 +243,8 @@ def cli(argv: list[str] | None = None) -> None:
         voices(args.action, args.name)
     elif args.command == "apps":
         apps(args.query, args.refresh)
+    elif args.command == "browser":
+        browser(args.action)
     elif args.command == "demo-safety":
         asyncio.run(demo_safety())
     else:

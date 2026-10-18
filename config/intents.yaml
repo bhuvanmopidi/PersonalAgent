@@ -7,10 +7,17 @@
 
 intents:
   # ---- media / web ----
+  - name: youtube_play
+    description: "Playing {query} on YouTube"
+    patterns:
+      - '(?:play|put on|watch)(?: me)?(?: (?:a|an|some))? (?P<query>.+?) (?:on|in|from) (?:youtube|yt)'
+      - 'youtube play (?P<query>.+)'
+    action: { kind: youtube_play, target: '{query}' }
+
   - name: youtube_search
     description: "Searching YouTube for {query}"
     patterns:
-      - '(?:play|search(?: for)?|find|look up) (?P<query>.+?) on youtube'
+      - '(?:search(?: for)?|find|look up) (?P<query>.+?) on youtube'
       - '(?:search )?(?:on )?youtube (?:for )?(?P<query>.+)'
     action: { kind: open_url, target: 'https://www.youtube.com/results?search_query={query|url}' }
 
@@ -104,6 +111,146 @@ intents:
     description: "Locking the screen"
     patterns: ['lock(?: (?:the |my )?(?:screen|computer|pc|laptop|system))?']
     action: { kind: lock_screen, target: session }
+
+  # ---- browser: the current video / tab (Jarvis Chrome) ----
+  # seek/speed come FIRST: "skip 30 seconds" isn't next_video, "go back 1 minute" isn't go_back.
+  # Units: s/sec/second(s), m/min/minute(s), h/hr/hour(s). Bare "fast forward"/"rewind" = 10 s.
+  - name: media_forward
+    description: "Skipping ahead"
+    speak: result
+    defaults: { amount: "10", unit: "seconds" }
+    patterns:
+      - '(?:fast ?forward|forward|skip ahead|skip forward|jump ahead|go forward)(?: (?:by|for))? (?P<amount>\d+) ?(?P<unit>s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)'
+      - 'skip (?P<amount>\d+) ?(?P<unit>s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)'
+      - 'fast ?forward(?: (?:the |this )?video)?'
+    action: { kind: media_key, target: seek, args: { direction: forward, amount: '{amount}', unit: '{unit}' } }
+
+  - name: media_rewind
+    description: "Going back"
+    speak: result
+    defaults: { amount: "10", unit: "seconds" }
+    patterns:
+      - '(?:rewind|go back|back|skip back|jump back)(?: (?:by|for))? (?P<amount>\d+) ?(?P<unit>s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)'
+      - 'rewind(?: (?:the |this )?video)?'
+    action: { kind: media_key, target: seek, args: { direction: back, amount: '{amount}', unit: '{unit}' } }
+
+  - name: media_seek_to
+    description: "Jumping"
+    speak: result
+    patterns:
+      - '(?:go|jump|skip|seek|move) to (?P<time>\d+(?::\d{1,2}){1,2})'
+      - '(?:go|jump|skip|seek|move) to (?P<amount>\d+) ?(?P<unit>s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)'
+    action: { kind: media_key, target: seek_to, args: { time: '{time}', amount: '{amount}', unit: '{unit}' } }
+
+  - name: media_restart
+    description: "From the beginning"
+    speak: none
+    patterns:
+      - '(?:restart|replay|start over|start from the beginning|(?:play|go|start) (?:it )?from the (?:beginning|start))(?: (?:the |this )?video)?'
+    action: { kind: media_key, target: restart }
+
+  - name: media_speed
+    description: "Speed"
+    speak: result
+    patterns:
+      - '(?:set )?(?:the )?(?:playback )?speed (?:to )?(?P<rate>\d(?:\.\d+)?) ?x?'
+      - '(?:play )?(?:at )?(?P<rate>\d(?:\.\d+)?) ?x(?: speed)?'
+    action: { kind: media_key, target: speed, args: { rate: '{rate}' } }
+
+  - name: media_faster
+    description: "Faster"
+    speak: result
+    patterns: ['(?:play )?faster', 'speed (?:it |the video )?up']
+    action: { kind: media_key, target: speed, args: { step: "0.25" } }
+
+  - name: media_slower
+    description: "Slower"
+    speak: result
+    patterns: ['(?:play )?slower', 'slow (?:it |the video )?down']
+    action: { kind: media_key, target: speed, args: { step: "-0.25" } }
+
+  - name: media_normal_speed
+    description: "Normal speed"
+    speak: result
+    patterns: ['(?:back to |reset (?:the )?)?normal speed', 'reset (?:the )?speed']
+    action: { kind: media_key, target: speed, args: { rate: "1" } }
+
+  - name: media_pause
+    description: "Pausing"
+    speak: none
+    patterns: ['(?:pause|stop playing)(?: (?:the |this )?(?:video|music|song|youtube))?(?: please)?']
+    action: { kind: media_key, target: pause }
+
+  - name: media_resume
+    description: "Resuming"
+    speak: none
+    patterns:
+      - '(?:resume|unpause|continue playing)(?: (?:the |this )?(?:video|music|song|youtube))?'
+      - 'play(?: it)?(?: again)?'
+    action: { kind: media_key, target: resume }
+
+  - name: skip_ad
+    description: "Skipping the ad"
+    patterns: ['skip (?:the |this )?ads?']
+    action: { kind: media_key, target: skip_ad }
+
+  - name: next_video
+    description: "Next video"
+    patterns: ['(?:next|skip)(?: (?:the |this )?(?:video|song|track))?', 'play the next (?:video|song)']
+    action: { kind: media_key, target: next }
+
+  - name: fullscreen
+    description: "Full screen"
+    speak: none
+    patterns: ['(?:go |make (?:it|the video) |exit |leave )?full ?screen(?: mode)?']
+    action: { kind: media_key, target: fullscreen }
+
+  # "play X" with no app named → YouTube (Spotify arrives in Phase 9). Placed AFTER the media
+  # intents so "play", "play it again", "play the next video" keep their meaning; "… on spotify"
+  # is left unmatched rather than played on YouTube by mistake.
+  - name: play_default
+    description: "Playing {query} on YouTube"
+    patterns:
+      - '(?:play|put on)(?: me)?(?: (?:a|an|some))? (?!.* on spotify$)(?P<query>.+)'
+    action: { kind: youtube_play, target: '{query}' }
+
+  - name: ad_policy
+    speak: result
+    description: "Ad setting"
+    patterns:
+      - '(?P<mode>always|never) skip (?:the )?ads'
+      - '(?P<mode>ask)(?: me)? (?:before skipping|about) (?:the )?ads'
+    action: { kind: set_ad_policy, target: '{mode}' }
+
+  - name: go_back
+    description: "Going back"
+    speak: none
+    patterns: ['(?:go )?back(?: a page)?', 'previous page']
+    action: { kind: browser_nav, target: back }
+
+  - name: go_forward
+    description: "Going forward"
+    speak: none
+    patterns: ['(?:go )?forward(?: a page)?']
+    action: { kind: browser_nav, target: forward }
+
+  - name: reload
+    description: "Reloading"
+    speak: none
+    patterns: ['(?:reload|refresh)(?: (?:the |this )?page)?']
+    action: { kind: browser_nav, target: reload }
+
+  - name: new_tab
+    description: "New tab"
+    speak: none
+    patterns: ['(?:open )?(?:a )?new tab']
+    action: { kind: browser_nav, target: new_tab }
+
+  - name: close_tab
+    description: "Closing the tab"
+    speak: none
+    patterns: ['close (?:the |this )?(?:current )?tab']
+    action: { kind: browser_nav, target: close_tab }
 
   # ---- apps (generic — keep last) ----
   - name: close_app

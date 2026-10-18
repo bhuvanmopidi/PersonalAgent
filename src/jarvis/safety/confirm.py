@@ -35,12 +35,23 @@ def build_confirm_prompt(action: Action, check: PolicyResult) -> str:
 
 
 def build_handoff_message(action: Action, check: PolicyResult) -> str:
+    # spoken aloud, so plain words only — the technical reasons go to the log
     summary = action.description or f"{action.kind} {action.target}".strip()
-    return f"I need you for this step: {summary}. Reason: {'; '.join(check.reasons)}."
+    return f"I need you for this step: {summary}. Say done when you've finished."
+
+
+def can_cancel(confirmer: object) -> bool:
+    """Whether a pending question may be abandoned (e.g. the CAPTCHA went away on its own).
+
+    A terminal prompt can't: its input() thread would keep running and swallow the next line typed.
+    """
+    return bool(getattr(confirmer, "cancellable", True))
 
 
 class TerminalConfirmer:
     """Asks in the terminal without blocking the event loop."""
+
+    cancellable = False
 
     async def confirm(self, prompt: str) -> bool:
         answer = await asyncio.to_thread(input, f"{prompt} [y/N] ")
@@ -62,6 +73,10 @@ class SpokenConfirmer:
 
     def __init__(self, inner: Confirmer, speaker: Announcer) -> None:
         self.inner, self.speaker = inner, speaker
+
+    @property
+    def cancellable(self) -> bool:
+        return can_cancel(self.inner)
 
     async def confirm(self, prompt: str) -> bool:
         await self.speaker.say(prompt)

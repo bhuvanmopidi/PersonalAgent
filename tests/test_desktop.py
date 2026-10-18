@@ -89,6 +89,25 @@ async def test_voice_pipeline_end_to_end(spoken: str, expected: str) -> None:
     assert normalize(heard.text) == expected, heard.text
 
 
+async def test_real_chrome_plays_and_pauses_youtube() -> None:
+    """Launches (or reuses) the Jarvis Chrome window, plays a video for real, then pauses it."""
+    from jarvis.executors.browser_session import find_chrome
+
+    if find_chrome() is None:
+        pytest.skip("Google Chrome not installed")
+    agent = Agent.create(load_settings(), ScriptedConfirmer(), mute=True)
+    try:
+        assert (await agent.handle("always skip ads")).result.ok  # no one to answer "skip it?"
+        played = await agent.handle("play lofi on youtube")
+        assert played.result.ok, played.result.observation
+        assert played.result.observation.startswith("Playing: ")
+        assert "default browser" not in played.result.observation  # really drove Chrome
+        paused = await agent.handle("pause")
+        assert paused.result.ok, paused.result.observation
+    finally:
+        await agent.close()
+
+
 async def test_volume_set_and_restore() -> None:
     volume = Volume()
     original = volume.get()

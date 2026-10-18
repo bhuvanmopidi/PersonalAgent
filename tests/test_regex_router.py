@@ -38,7 +38,44 @@ def test_normalize(text: str, expected: str) -> None:
         ("close notepad", "close_app", {"app": "notepad"}),
         ("quit the spotify app", "close_app", {"app": "spotify"}),
         ("close my notepad", "close_app", {"app": "notepad"}),
-        ("play lofi on youtube", "youtube_search", {"query": "lofi"}),
+        ("play lofi on youtube", "youtube_play", {"query": "lofi"}),
+        ("put on arijit singh songs on youtube", "youtube_play", {"query": "arijit singh songs"}),
+        ("search lofi on youtube", "youtube_search", {"query": "lofi"}),
+        ("play a hardstylemusic in youtube", "youtube_play", {"query": "hardstylemusic"}),
+        ("play me a song on yt", "youtube_play", {"query": "song"}),
+        ("watch mr beast on youtube", "youtube_play", {"query": "mr beast"}),
+        ("play a hardstyle music", "play_default", {"query": "hardstyle music"}),
+        ("play some lofi", "play_default", {"query": "lofi"}),
+        ("put on arijit singh songs", "play_default", {"query": "arijit singh songs"}),
+        ("play it again", "media_resume", {}),  # not play_default("it again")
+        ("play the next video", "next_video", {}),
+        ("fast forward by 10 min", "media_forward", {"amount": "10", "unit": "min"}),
+        ("fast forward", "media_forward", {"amount": "10", "unit": "seconds"}),
+        ("skip 30 seconds", "media_forward", {"amount": "30", "unit": "seconds"}),  # not next_video
+        ("rewind", "media_rewind", {"amount": "10", "unit": "seconds"}),
+        ("go back 1 minute", "media_rewind", {"amount": "1", "unit": "minute"}),  # not go_back
+        ("go to 5:30", "media_seek_to", {"time": "5:30"}),
+        ("jump to 10 minutes", "media_seek_to", {"amount": "10", "unit": "minutes"}),
+        ("start over", "media_restart", {}),
+        ("speed 1.5x", "media_speed", {"rate": "1.5"}),
+        ("slow down", "media_slower", {}),
+        ("normal speed", "media_normal_speed", {}),
+        ("pause", "media_pause", {}),
+        ("pause the video", "media_pause", {}),
+        ("resume", "media_resume", {}),
+        ("play", "media_resume", {}),
+        ("next video", "next_video", {}),
+        ("skip", "next_video", {}),
+        ("skip the ad", "skip_ad", {}),
+        ("full screen", "fullscreen", {}),
+        ("exit full screen", "fullscreen", {}),  # not close_app("full screen")
+        ("always skip ads", "ad_policy", {"mode": "always"}),
+        ("never skip ads", "ad_policy", {"mode": "never"}),
+        ("ask me about ads", "ad_policy", {"mode": "ask"}),
+        ("go back", "go_back", {}),
+        ("refresh the page", "reload", {}),
+        ("open a new tab", "new_tab", {}),  # not open_app("a new tab")
+        ("close this tab", "close_tab", {}),
         ("search youtube for blinding lights", "youtube_search", {"query": "blinding lights"}),
         ("youtube arijit singh songs", "youtube_search", {"query": "arijit singh songs"}),
         ("google best earbuds under 2000", "web_search", {"query": "best earbuds under 2000"}),
@@ -75,3 +112,8 @@ def test_no_match(router: RegexRouter, text: str) -> None:
 
 def test_every_intent_has_an_action_kind(router: RegexRouter) -> None:
     assert all(spec.action.kind for spec in router.specs.values())
+
+
+@pytest.mark.parametrize("text", ["play blinding lights on spotify"])
+def test_spotify_requests_are_not_played_on_youtube(router: RegexRouter, text: str) -> None:
+    assert router.route(text) is None  # until Phase 9: never the wrong app

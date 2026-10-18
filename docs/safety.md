@@ -16,7 +16,8 @@ Code: `src/jarvis/safety/` and `src/jarvis/executors/base.py`. Rules: `config/sa
 ```
 risk = max( risk of action.kind,             # unknown kind → YELLOW
             risk of keywords in action.target,  # the UI label, e.g. "Delete forever"
-            risk of action.flags )           # e.g. password_field, captcha_detected
+            risk of action.flags,            # e.g. password_field, captcha_detected
+            risk of the page / URL )         # action.page_url, or the target for open_url
 ```
 
 - **Risk only goes up.** A harmless kind cannot lower a risky label or flag.
@@ -93,13 +94,30 @@ The same `redact()` runs on everything Jarvis **speaks** (Phase 3), so secrets a
 
 Emails and phone numbers are **kept** on purpose, because the agent needs them for contacts and read-backs.
 
+## Page context (`url_rules`, Phase 5)
+
+Browser actions carry `page_url`, filled in by `ActionRunner`'s annotator (the current tab) before
+the policy runs; for `open_url` (`url_kinds`) the target URL itself is checked. Matching
+`url_rules.payment` (checkout paths like `/checkout`, `/gp/buy`; gateway hosts like razorpay.com,
+payu.in, paytm.com, checkout.stripe.com, matched as the host or a subdomain) makes the action at
+least PAYMENT, so without full payment details it is **refused**, even a "pause".
+
+## CAPTCHA handoff (`safety/captcha.py`, Phase 5)
+
+After every page load, `CaptchaGate` checks for challenge iframes (`captcha.iframe_hosts`:
+reCAPTCHA, hCaptcha, Cloudflare, Arkose) and phrases (`captcha.phrases`: "verify you are human",
+"unusual traffic from your computer", …). If found, the window comes to the front and a
+`solve_captcha` action with flag `captcha_detected` goes through `ActionRunner` → RED → handoff.
+The task resumes when you say "done", or as soon as the challenge disappears. **It is never solved
+by the agent.** In typed mode it waits for Enter (a terminal prompt can't be abandoned; see
+`can_cancel()`).
+
 ## Planned layers
 
 Each one can only *raise* risk:
 
 | Layer | Phase |
 |---|---|
-| URL rules (checkout pages, payment gateways) | 5 |
 | Per-app risky shortcuts (e.g. Gmail Ctrl+Enter = send), focused-element check | 11 |
 | AI risk judge | 11 |
 | Shell commands: PowerShell AST, verb semantics, allowlist, obfuscation → refuse | 11b |

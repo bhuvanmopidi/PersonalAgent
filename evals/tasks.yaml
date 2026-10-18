@@ -9,7 +9,7 @@ tasks:
   - { id: open_typo_app, command: "open spotfy", expected_intent: open_app, expected_tier: 1,
       check: "Spotify opens despite the typo", max_latency_ms: 800 }
   - { id: open_site_alias, command: "open youtube", expected_intent: open_app, expected_tier: 1,
-      check: "youtube.com opens in the default browser", max_latency_ms: 500 }
+      check: "youtube.com opens in the Jarvis Chrome window, not the installed web app", max_latency_ms: 1500 }
   - { id: open_domain, command: "go to github.com", expected_intent: open_app, expected_tier: 1,
       check: "github.com opens", max_latency_ms: 500 }
   - { id: close_notepad, command: "close notepad", expected_intent: close_app, expected_tier: 1,
@@ -53,3 +53,42 @@ tasks:
       max_latency_ms: 25000 }
   - { id: voice_false_wake, spoken: "Hey Travis / ordinary conversation", expected_intent: none,
       expected_tier: 0, check: "does not wake", max_latency_ms: 0 }
+  # ---- browser (Phase 5): Jarvis Chrome over CDP ----
+  - { id: yt_play, command: "play lofi on youtube", expected_intent: youtube_play, expected_tier: 1,
+      check: "a non-ad, non-Short video is playing; 'Playing: <title>'", max_latency_ms: 5000 }
+  - { id: yt_play_music_query, command: "play arijit singh songs on youtube",
+      expected_intent: youtube_play, expected_tier: 1,
+      check: "plays (results carry YouTube's &list=RD radio queue)", max_latency_ms: 5000 }
+  - { id: yt_pause_resume, command: "pause / resume", expected_intent: media_pause, expected_tier: 1,
+      check: "video paused, then playing", max_latency_ms: 300 }
+  - { id: yt_next, command: "next video", expected_intent: next_video, expected_tier: 1,
+      check: "Shift+N sent; fails cleanly when no video is open", max_latency_ms: 300 }
+  - { id: yt_ad_ask, command: "play X on youtube (ad with Skip)", expected_intent: youtube_play,
+      expected_tier: 1, check: "ad muted, 'Skip it?' asked; yes skips, no/8 s leaves it",
+      max_latency_ms: 15000 }
+  - { id: open_site_in_jarvis_chrome, command: "open instagram", expected_intent: open_app,
+      expected_tier: 1, check: "opens in the Jarvis Chrome window", max_latency_ms: 1500 }
+  - { id: tab_nav, command: "go back / new tab / close this tab", expected_intent: go_back,
+      expected_tier: 1, check: "current tab navigates", max_latency_ms: 300 }
+  - { id: captcha_handoff, command: "open <page with reCAPTCHA>", expected_intent: open_app,
+      expected_tier: 1, check: "handoff spoken; resumes when the check disappears; never solved",
+      max_latency_ms: 600000 }
+  - { id: checkout_page_risk, command: "pause (on a /checkout page)", expected_intent: media_pause,
+      expected_tier: 1, check: "raised to PAYMENT, refused", max_latency_ms: 300 }
+  - { id: chrome_down_no_fallback, command: "play lofi on youtube (Chrome can't start)",
+      expected_intent: youtube_play, expected_tier: 1,
+      check: "fails with 'couldn't open the Jarvis Chrome window'; nothing opens elsewhere",
+      max_latency_ms: 20000 }
+  - { id: web_app_as_website, command: "open gmail (Gmail PWA installed)", expected_intent: open_app,
+      expected_tier: 1, check: "mail.google.com in the Jarvis Chrome window, PWA not launched",
+      max_latency_ms: 1500 }
+  - { id: yt_error_page, command: "play lofi on youtube (YouTube redirects to /oops)",
+      expected_intent: youtube_play, expected_tier: 1,
+      check: "fails in ~2 s with the account message, not 'took too long'", max_latency_ms: 3000 }
+  - { id: yt_seek, command: "fast forward by 10 min / rewind 30 seconds / go to 1:00",
+      expected_intent: media_forward, expected_tier: 1,
+      check: "currentTime moves exactly; 'At m:ss of h:mm:ss'", max_latency_ms: 300 }
+  - { id: yt_speed, command: "speed 1.5x / slower / normal speed", expected_intent: media_speed,
+      expected_tier: 1, check: "playbackRate 1.5 → 1.25 → 1", max_latency_ms: 300 }
+  - { id: yt_seek_live, command: "fast forward (on a live stream)", expected_intent: media_forward,
+      expected_tier: 1, check: "refused: live stream", max_latency_ms: 300 }

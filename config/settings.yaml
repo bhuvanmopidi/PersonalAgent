@@ -31,6 +31,13 @@ stt:
   device: auto                      # auto | cuda | cpu
   hotwords: [lofi, Jarvis, volume, brightness, mute, unmute]   # + app/site names automatically
 
+browser:
+  enabled: true                     # false: links open in your default browser, no automation
+  chrome_path: ""                   # "" = find chrome.exe automatically
+  profile_dir: ""                   # "" = %LOCALAPPDATA%\JarvisAgent\chrome-profile (separate from your Chrome)
+  cdp_port: 9222                    # local remote-control port (127.0.0.1 only)
+  launch_timeout_s: 15
+
 llm:
   provider: anthropic               # swappable: anthropic | ollama (Phase 7)
   model: claude-opus-5-5

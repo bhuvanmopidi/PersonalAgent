@@ -17,7 +17,10 @@ from pydantic import BaseModel, Field
 from rapidfuzz import fuzz
 
 from jarvis.config import CONFIG_DIR
+from jarvis.telemetry.logging import get_logger
 from jarvis.tiers.instant.app_index import AppEntry, AppIndex, Quality, best_match
+
+log = get_logger(__name__)
 
 ALIASES_PATH = CONFIG_DIR / "apps" / "aliases.yaml"
 REFRESH_COOLDOWN_S = 300
@@ -123,6 +126,14 @@ class AppLauncher:
 
         name = alias.name if alias and alias.name else q
         app = self._find_app(name, retry=site is None)
+        if app and app[0].is_web_app:
+            # a browser web app is a website: open its site in the Jarvis Chrome window, never the
+            # installed app (it runs in your normal profile, which Jarvis can't control)
+            web = self._find_site(app[0].name.lower())
+            if web:
+                return self._site_plan(web[0])
+            log.warning("web app %r has no address in aliases.yaml sites", app[0].name)
+            app = None
         candidates: list[tuple[int, LaunchPlan]] = []
         if app:
             entry, quality = app

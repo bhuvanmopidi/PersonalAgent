@@ -34,6 +34,7 @@ class Action(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
     description: str = ""  # human-readable, used in confirmations and logs
     flags: set[str] = Field(default_factory=set)  # e.g. password_field, captcha_detected
+    page_url: str = ""  # browser page the action happens on (filled in before the safety check)
 
 
 class ActionResult(BaseModel):

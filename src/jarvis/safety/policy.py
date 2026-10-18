@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 from pathlib import Path
+from urllib.parse import urlparse
 
 import yaml
 from pydantic import BaseModel, Field
@@ -40,12 +41,56 @@ class RiskLists(BaseModel):
         }
 
 
+class UrlRule(BaseModel):
+    path_keywords: list[str] = Field(default_factory=list)
+    hosts: list[str] = Field(default_factory=list)  # matches the host and its subdomains
+
+
+class UrlRules(BaseModel):
+    yellow: UrlRule = UrlRule()
+    payment: UrlRule = UrlRule()
+    red: UrlRule = UrlRule()
+
+    def by_level(self) -> dict[RiskLevel, UrlRule]:
+        return {
+            RiskLevel.YELLOW: self.yellow,
+            RiskLevel.PAYMENT: self.payment,
+            RiskLevel.RED: self.red,
+        }
+
+
+class CaptchaRules(BaseModel):
+    iframe_hosts: list[str] = Field(default_factory=list)
+    phrases: list[str] = Field(default_factory=list)
+
+
 class SafetyRules(BaseModel):
     kinds: RiskLists = RiskLists()
     keywords: RiskLists = RiskLists()
     flags: RiskLists = RiskLists()
     keyword_kinds: list[str] = Field(default_factory=list)  # kinds whose target is a UI label
+    url_kinds: list[str] = Field(default_factory=list)  # kinds whose target is a URL
+    url_rules: UrlRules = UrlRules()
+    captcha: CaptchaRules = CaptchaRules()
     payment_required_fields: list[str] = Field(default_factory=list)
+
+
+def url_risk(url: str, rules: UrlRules) -> tuple[RiskLevel, str] | None:
+    """Highest level whose host or path rule matches the URL, with the matching rule."""
+    if not url:
+        return None
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    host, path = (parsed.hostname or "").lower(), parsed.path.lower()
+    for level in (RiskLevel.RED, RiskLevel.PAYMENT, RiskLevel.YELLOW):
+        rule = rules.by_level()[level]
+        for h in rule.hosts:
+            h_host, _, h_path = h.lower().partition("/")
+            if (host == h_host or host.endswith("." + h_host)) and path.startswith("/" + h_path):
+                return level, f"host {h}"
+        for kw in rule.path_keywords:
+            if kw.lower() in path:
+                return level, f"path {kw}"
+    return None
 
 
 class PolicyResult(BaseModel):
@@ -93,6 +138,16 @@ class SafetyPolicy:
             if level > risk:
                 risk = level
                 reasons.append(f"flag '{flag}' ({level.name})")
+
+        # where it happens: the page it acts on, or the URL it opens
+        urls = [("page", action.page_url)]
+        if action.kind in self.rules.url_kinds:
+            urls.append(("url", action.target))
+        for what, url in urls:
+            match = url_risk(url, self.rules.url_rules)
+            if match and match[0] > risk:
+                risk = match[0]
+                reasons.append(f"{what} matches {match[1]} ({risk.name})")
 
         return risk, reasons
 

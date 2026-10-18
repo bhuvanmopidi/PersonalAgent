@@ -101,6 +101,19 @@ Microphone (80 ms frames) ─► ListenerCore: wake word / push-to-talk → reco
 While a task runs the mic is in "open" mode — "stop" and "yes/no" need no wake word — except while
 Jarvis itself is speaking. Details: [phases/phase-04-voice-in.md](phases/phase-04-voice-in.md).
 
+## Browser (built in Phase 5)
+
+```
+Action ─► ActionRunner: annotate (current tab URL → page_url) → policy → KindRouter
+              ├─ OS kinds ─► OSExecutor          ("open instagram" → website → BrowserExecutor)
+              └─ browser kinds ─► BrowserExecutor ─► BrowserSession ─CDP─► Jarvis Chrome window
+                                    ├─ YouTubeFlow (pick, play, ads)     (separate data folder)
+                                    └─ CaptchaGate → handoff via ActionRunner (RED) → resume
+```
+
+Chrome 136+ won't let any program drive your normal profiles, so Jarvis uses its own Chrome data
+folder (sign in once with `jarvis browser setup`). Details: [phases/phase-05-browser.md](phases/phase-05-browser.md).
+
 ## Cross-cutting pieces
 
 | Piece | File | Purpose |
@@ -118,4 +131,5 @@ Jarvis itself is speaking. Details: [phases/phase-04-voice-in.md](phases/phase-0
 | Regex router, Tier-1 OS tools (apps, URLs, volume, brightness, folders, files, lock), typed CLI | ✅ Phase 2 |
 | Text-to-speech: Piper + SAPI fallback, speak-while-acting, spoken confirmations | ✅ Phase 3 |
 | Voice input: wake word, push-to-talk, VAD, Whisper (GPU), voice confirmations, "stop" | ✅ Phase 4 |
-| Browser, desktop app flows, AI agents, skills, memory | Planned |
+| Browser: Jarvis Chrome over CDP, YouTube play/ads, media + tab control, CAPTCHA handoff, page-aware risk | ✅ Phase 5 |
+| LLM layer, Amazon/Gmail flows, desktop app flows, AI agents, skills, memory | Planned |

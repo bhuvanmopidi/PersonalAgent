@@ -53,6 +53,14 @@ class STTSettings(BaseModel):
     hotwords: list[str] = Field(default_factory=list)
 
 
+class BrowserSettings(BaseModel):
+    enabled: bool = True  # false → links open in the default browser, no automation
+    chrome_path: str = ""  # "" = find chrome.exe automatically
+    profile_dir: str = ""  # "" = %LOCALAPPDATA%\JarvisAgent\chrome-profile
+    cdp_port: int = Field(default=9222, ge=1024, le=65535)
+    launch_timeout_s: float = Field(default=15.0, gt=0)
+
+
 class Settings(BaseModel):
     log_level: str = "INFO"
     hotkeys: HotkeySettings = HotkeySettings()
@@ -61,6 +69,7 @@ class Settings(BaseModel):
     tts: TTSSettings = TTSSettings()
     listen: ListenSettings = ListenSettings()
     stt: STTSettings = STTSettings()
+    browser: BrowserSettings = BrowserSettings()
 
 
 def load_settings(path: Path = DEFAULT_SETTINGS_PATH) -> Settings:

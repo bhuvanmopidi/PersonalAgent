@@ -28,6 +28,17 @@ def make(
     return ActionRunner(SafetyPolicy.from_yaml(), executor, confirmer), executor, confirmer
 
 
+async def test_annotator_runs_before_the_policy() -> None:
+    executor, confirmer = RecordingExecutor(), ScriptedConfirmer([False])
+
+    async def on_checkout_page(action: Action) -> Action:
+        return action.model_copy(update={"page_url": "https://shop.example/checkout/review"})
+
+    runner = ActionRunner(SafetyPolicy.from_yaml(), executor, confirmer, annotate=on_checkout_page)
+    result = await runner.run_action(Action(kind="media_key", target="pause"))
+    assert result.error == "refused" and executor.calls == []  # PAYMENT from the page context
+
+
 async def test_green_runs_without_asking() -> None:
     runner, executor, confirmer = make()
     result = await runner.run_action(Action(kind="launch_app", target="notepad"))
@@ -75,3 +86,26 @@ async def test_executor_exception_becomes_result() -> None:
     runner, _, _ = make(fail=True)
     result = await runner.run_action(Action(kind="launch_app"))
     assert not result.ok and result.error is not None and "window not found" in result.error
+
+
+class SilentSpeaker:
+    async def say(self, text: str, wait: bool = False) -> None:
+        return None
+
+
+def test_confirmers_say_whether_a_question_can_be_abandoned() -> None:
+    from jarvis.safety.confirm import SpokenConfirmer, TerminalConfirmer, can_cancel
+
+    assert can_cancel(ScriptedConfirmer())
+    assert not can_cancel(TerminalConfirmer())  # its input() thread can't be stopped
+    assert not can_cancel(SpokenConfirmer(TerminalConfirmer(), SilentSpeaker()))
+    assert can_cancel(SpokenConfirmer(ScriptedConfirmer(), SilentSpeaker()))
+
+
+async def test_handoff_message_is_plain_words() -> None:
+    runner, _, confirmer = make()
+    await runner.run_action(Action(kind="enter_otp", description="enter the OTP"))
+    assert (
+        confirmer.prompts[0]
+        == "I need you for this step: enter the OTP. Say done when you've finished."
+    )

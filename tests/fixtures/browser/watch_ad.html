@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><title>Lofi Girl - YouTube</title><script src="fakevideo.js"></script></head>
+<body>
+  <div id="movie_player" class="ad-showing">
+    <video class="html5-main-video"></video>
+    <button class="ytp-skip-ad-button" style="display:none">Skip</button>
+  </div>
+  <script>
+    const v = fakeVideo(document.querySelector("video"));
+    const player = document.getElementById("movie_player");
+    const skip = document.querySelector(".ytp-skip-ad-button");
+    window.adSkipped = false;
+    function endAd() { player.classList.remove("ad-showing"); skip.style.display = "none"; v.play(); }
+    v.play();                                                           // the ad plays first
+    setTimeout(() => { skip.style.display = "block"; }, 200);         // Skip appears
+    // "?sticky": the first click doesn't take (button re-rendering) — the agent must retry
+    let ignoreClicks = location.search.includes("sticky") ? 1 : 0;
+    window.skipClicks = 0;
+    skip.addEventListener("click", () => {
+      window.skipClicks += 1;
+      if (ignoreClicks-- > 0) return;
+      window.adSkipped = true; endAd();
+    });
+    setTimeout(() => { if (player.classList.contains("ad-showing")) endAd(); }, 1200);  // ad ends
+  </script>
+</body></html>

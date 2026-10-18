@@ -8,7 +8,7 @@ Voice (Phase 4) will feed the same router.
 | Example | Intent | What happens |
 |---|---|---|
 | "open notepad", "launch the chrome app", "open spotfy" | `open_app` | Launches from the app index (typos OK) |
-| "open youtube", "go to github.com" | `open_app` | Site alias or domain, opened in the default browser |
+| "open youtube", "go to github.com" | `open_app` | Site alias or domain (since Phase 5: opened in the Jarvis Chrome window) |
 | "close notepad", "quit spotify" | `close_app` | Graceful close, like clicking ✕ (the app still asks about unsaved work) |
 | "play lofi on youtube", "search youtube for X" | `youtube_search` | Opens the YouTube results page (actually playing comes in Phase 5) |
 | "google X", "search for X" | `web_search` | Google results |
