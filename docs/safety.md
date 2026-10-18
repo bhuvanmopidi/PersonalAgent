@@ -81,6 +81,8 @@ Voice and on-screen confirmers will implement the same protocol in later phases.
 | Aadhaar | Exactly 12 digits (not part of a longer number) | `[AADHAAR]` |
 | PAN | `ABCDE1234F` pattern | `[PAN]` |
 
+The same `redact()` runs on everything Jarvis **speaks** (Phase 3), so secrets are never read aloud.
+
 Emails and phone numbers are **kept** on purpose, because the agent needs them for contacts and read-backs.
 
 ## Planned layers

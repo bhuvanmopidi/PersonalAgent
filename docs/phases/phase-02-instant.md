@@ -53,9 +53,28 @@ New dependencies: `pycaw`, `screen-brightness-control`, `rapidfuzz`, `psutil` (+
   OSExecutor         → os.startfile(url) → ActionResult(ok, "Opened …")
 ```
 
-**Resolving "open X":** alias (URI or command) → site alias → app index → exe on PATH → looks like a
-domain → "I couldn't find X". On a miss the index is rebuilt once (apps installed since the cache
-was built), at most every 5 minutes.
+**Resolving "open X" — app or website?** (revised after Phase 3, see below)
+
+The router strips filler ("open **up me the** instagram") and keeps a trailing **app / website /
+site** as a `prefer` hint. `AppLauncher.resolve(name, prefer)` then decides:
+
+| You say | Result |
+|---|---|
+| "open instagram.com" | typed domain → website |
+| "open instagram **website**" | websites only (`prefer=web`) |
+| "open whatsapp **app**" | installed apps only (`prefer=app`); fails if not installed |
+| "open whatsapp" (no hint) | best match wins, in this order: exact app · exact site · prefix app · prefix site · fuzzy app · fuzzy site — so an **installed app beats the website**, and "insta" still finds instagram.com |
+| "open github" | sites in `prefer_web` (Gmail, Amazon, GitHub…) open in the browser even if a same-named app (GitHub Desktop) is installed — exact site name only |
+
+App/command aliases (`settings` → `ms-settings:`) are checked first; an exe on PATH is the last
+resort. Apps are fuzzy-matched with WRatio (partial names: "chrome" → Google Chrome); sites use plain
+whole-string ratio, so typos match ("instagarm") but "xbox" never matches the site "x" and
+"google chrome" never matches the site "google". On a total miss the index is rebuilt once (apps
+installed since the cache was built), at most every 5 minutes.
+
+*Fix history:* originally sites were exact-match only, filler words weren't stripped and the
+app/website word was discarded — "open me instagram" failed, and "open me youtube" only worked
+because the YouTube Chrome app happened to be installed.
 
 **App index.** `Get-StartApps` returns every Start-menu app, both Store and classic, with an AppID.
 Every AppID launches the same way: `shell:AppsFolder\<AppID>` through ShellExecute (`os.startfile`).

@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, TypeAdapter
 from rapidfuzz import fuzz, process
@@ -22,9 +24,33 @@ FUZZY_CUTOFF = 85
 _SKIP_WORDS = ("uninstall", "readme", "release notes", "documentation")
 
 
+Quality = Literal["exact", "prefix", "fuzzy"]
+
+
 class AppEntry(BaseModel):
     name: str
     app_id: str
+
+
+def best_match(
+    query: str, names: list[str], scorer: Callable[..., float] = fuzz.WRatio
+) -> tuple[str, Quality] | None:
+    """Exact name → shortest name starting with query → fuzzy match (typos, partial names).
+
+    `names` must be lowercase. Returns the matched name and how good the match was.
+    WRatio also scores partial matches ("chrome" → "google chrome"); pass fuzz.ratio for
+    whole-string typo matching only.
+    """
+    q = query.lower().strip()
+    if not q:
+        return None
+    if q in names:
+        return q, "exact"
+    prefixed = [n for n in names if n.startswith(q)]
+    if prefixed:
+        return min(prefixed, key=len), "prefix"
+    match = process.extractOne(q, names, scorer=scorer, score_cutoff=FUZZY_CUTOFF)
+    return (match[0], "fuzzy") if match else None
 
 
 _ENTRIES = TypeAdapter(list[AppEntry])
@@ -69,14 +95,9 @@ class AppIndex:
         return cls(entries)
 
     def find(self, query: str) -> AppEntry | None:
-        """Exact name → shortest name starting with query → fuzzy match (typos, partial names)."""
-        q = query.lower().strip()
-        if not q:
-            return None
-        if q in self._by_name:
-            return self._by_name[q]
-        prefixed = [n for n in self._names if n.startswith(q)]
-        if prefixed:
-            return self._by_name[min(prefixed, key=len)]
-        match = process.extractOne(q, self._names, scorer=fuzz.WRatio, score_cutoff=FUZZY_CUTOFF)
-        return self._by_name[match[0]] if match else None
+        found = self.find_scored(query)
+        return found[0] if found else None
+
+    def find_scored(self, query: str) -> tuple[AppEntry, Quality] | None:
+        match = best_match(query, self._names)
+        return (self._by_name[match[0]], match[1]) if match else None

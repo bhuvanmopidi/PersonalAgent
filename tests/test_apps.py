@@ -3,7 +3,15 @@ from pathlib import Path
 import pytest
 
 from jarvis.tiers.instant.app_index import AppEntry, AppIndex
-from jarvis.tiers.instant.apps import AliasConfig, AppAlias, AppLauncher, LaunchPlan, load_aliases
+from jarvis.tiers.instant.apps import (
+    AliasConfig,
+    AppAlias,
+    AppLauncher,
+    LaunchPlan,
+    Prefer,
+    load_aliases,
+    parse_prefer,
+)
 
 ENTRIES = [
     AppEntry(name="Spotify", app_id="SpotifyAB.Spotify!Spotify"),
@@ -84,6 +92,75 @@ def launcher(index: AppIndex) -> AppLauncher:
 def test_resolve(launcher: AppLauncher, query: str, kind: str, value: str) -> None:
     plan = launcher.resolve(query)
     assert plan is not None and (plan.kind, plan.value) == (kind, value)
+
+
+@pytest.fixture
+def web_launcher() -> AppLauncher:
+    """Installed: WhatsApp, GitHub Desktop, Google Chrome. Sites: whatsapp, instagram, github…"""
+    index = AppIndex(
+        [
+            AppEntry(name="WhatsApp", app_id="WhatsApp!App"),
+            AppEntry(name="GitHub Desktop", app_id="GitHubDesktop"),
+            AppEntry(name="Google Chrome", app_id="Chrome"),
+        ]
+    )
+    aliases = AliasConfig(
+        apps={"google chrome": AppAlias(name="Google Chrome", process="chrome")},
+        sites={
+            "whatsapp": "https://web.whatsapp.com",
+            "instagram": "https://www.instagram.com",
+            "github": "https://github.com",
+            "google": "https://www.google.com",
+            "x": "https://x.com",
+        },
+        prefer_web=["github", "google"],
+    )
+    return AppLauncher(aliases, Loader(index), opener=lambda _: None)
+
+
+@pytest.mark.parametrize(
+    ("query", "prefer", "value"),
+    [
+        ("whatsapp", "auto", "WhatsApp!App"),  # installed app beats the site
+        ("whatsapp", "web", "https://web.whatsapp.com"),  # "open whatsapp website"
+        ("whatsapp", "app", "WhatsApp!App"),
+        ("instagram", "auto", "https://www.instagram.com"),  # not installed → site
+        ("insta", "auto", "https://www.instagram.com"),  # prefix site match
+        ("instagarm", "auto", "https://www.instagram.com"),  # typo
+        ("github", "auto", "https://github.com"),  # prefer_web beats "GitHub Desktop"
+        ("github", "app", "GitHubDesktop"),  # …unless the user says "app"
+        ("google chrome", "auto", "Chrome"),  # not the "google" site
+        ("chrome", "auto", "Chrome"),
+        ("instagram.com", "auto", "https://instagram.com"),  # typed domain
+    ],
+)
+def test_resolve_app_vs_website(
+    web_launcher: AppLauncher, query: str, prefer: Prefer, value: str
+) -> None:
+    plan = web_launcher.resolve(query, prefer)
+    assert plan is not None and plan.value == value
+
+
+@pytest.mark.parametrize(
+    ("query", "prefer"),
+    [
+        ("instagram", "app"),  # not installed, and the user asked for the app
+        ("xbox", "auto"),  # must not fuzzy-match the site "x"
+        ("photoshop", "web"),
+    ],
+)
+def test_resolve_app_vs_website_not_found(
+    web_launcher: AppLauncher, query: str, prefer: Prefer
+) -> None:
+    assert web_launcher.resolve(query, prefer) is None
+
+
+@pytest.mark.parametrize(
+    ("word", "prefer"),
+    [("app", "app"), ("website", "web"), ("site", "web"), ("auto", "auto"), ("", "auto")],
+)
+def test_parse_prefer(word: str, prefer: Prefer) -> None:
+    assert parse_prefer(word) == prefer
 
 
 def test_resolve_unknown_refreshes_index_once(index: AppIndex) -> None:

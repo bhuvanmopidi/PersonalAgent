@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -26,11 +27,18 @@ class LLMSettings(BaseModel):
     model: str = "claude-opus-5-5"
 
 
+class TTSSettings(BaseModel):
+    engine: Literal["piper", "sapi", "none"] = "piper"
+    voice: str = "en_US-lessac-medium"
+    speed: float = Field(default=1.0, gt=0.25, le=3.0)
+
+
 class Settings(BaseModel):
     log_level: str = "INFO"
     hotkeys: HotkeySettings = HotkeySettings()
     router: RouterSettings = RouterSettings()
     llm: LLMSettings = LLMSettings()
+    tts: TTSSettings = TTSSettings()
 
 
 def load_settings(path: Path = DEFAULT_SETTINGS_PATH) -> Settings:

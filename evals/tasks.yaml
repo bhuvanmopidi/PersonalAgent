@@ -32,3 +32,8 @@ tasks:
       check: "Explorer opens with the resume selected", max_latency_ms: 2000 }
   - { id: lock, command: "lock the screen", expected_intent: lock, expected_tier: 1,
       check: "Windows lock screen", max_latency_ms: 300 }
+  # ---- voice out (Phase 3) ----
+  - { id: tts_short_phrase, command: "volume 24", expected_intent: volume_set, expected_tier: 1,
+      check: "'Volume 24%' spoken; first audio after prewarm", max_latency_ms: 150 }
+  - { id: tts_failure_spoken, command: "open blahblah", expected_intent: open_app, expected_tier: 1,
+      check: "failure sentence spoken, start phrase cut off", max_latency_ms: 400 }

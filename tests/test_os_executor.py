@@ -4,14 +4,16 @@ import pytest
 
 from jarvis.executors.os_executor import OSExecutor
 from jarvis.models import Action
-from jarvis.tiers.instant.apps import LaunchPlan
+from jarvis.tiers.instant.apps import LaunchPlan, Prefer
 
 
 class FakeLauncher:
     def __init__(self) -> None:
         self.launched: list[LaunchPlan] = []
+        self.prefers: list[Prefer] = []
 
-    def resolve(self, query: str) -> LaunchPlan | None:
+    def resolve(self, query: str, prefer: Prefer = "auto") -> LaunchPlan | None:
+        self.prefers.append(prefer)
         return LaunchPlan(kind="app", value="id", display="Spotify") if query == "spotify" else None
 
     def launch(self, plan: LaunchPlan) -> None:
@@ -76,6 +78,14 @@ async def test_launch_found_and_not_found() -> None:
     assert launcher.launched[0].display == "Spotify"
     missing = await executor.execute(Action(kind="launch_app", target="photoshop"))
     assert missing.error == "not_found" and "photoshop" in missing.observation
+
+
+async def test_launch_passes_prefer_hint() -> None:
+    executor, launcher, _, _ = make()
+    web = await executor.execute(Action(kind="launch_app", target="x", args={"prefer": "website"}))
+    await executor.execute(Action(kind="launch_app", target="x", args={"prefer": "auto"}))
+    assert launcher.prefers == ["web", "auto"]
+    assert "a website called 'x'" in web.observation
 
 
 async def test_close() -> None:

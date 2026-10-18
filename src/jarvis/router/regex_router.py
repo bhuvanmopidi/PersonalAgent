@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -32,6 +32,8 @@ class IntentSpec(BaseModel):
     action: ActionTemplate
     defaults: dict[str, str] = Field(default_factory=dict)
     description: str = ""
+    # what to say on success: the description up front, the result afterwards, or nothing
+    speak: Literal["description", "result", "none"] = "description"
 
 
 class IntentFile(BaseModel):

@@ -3,7 +3,10 @@
 #        process = exe name without .exe (used by "close X")
 #        uri     = open this URI instead (ms-settings:, spotify:, …)
 #        command = exe on PATH
-# sites: name → URL (checked before the app index)
+# sites: name → URL. Matched exact → prefix → fuzzy, like apps.
+#        "open X" with no hint: an installed app beats a site of equal match quality
+#        (installed WhatsApp > web.whatsapp.com); say "X website" / "X app" to force one.
+# prefer_web: sites that open in the browser even if a same-named app is installed.
 
 apps:
   chrome: { name: Google Chrome, process: chrome }
@@ -38,7 +41,16 @@ sites:
   linkedin: https://www.linkedin.com
   whatsapp: https://web.whatsapp.com
   instagram: https://www.instagram.com
+  insta: https://www.instagram.com
+  facebook: https://www.facebook.com
+  fb: https://www.facebook.com
+  yt: https://www.youtube.com
+  x: https://x.com
+  twitter: https://x.com
+  reddit: https://www.reddit.com
   netflix: https://www.netflix.com
   chatgpt: https://chatgpt.com
   claude: https://claude.ai
   stack overflow: https://stackoverflow.com
+
+prefer_web: [gmail, google, amazon, flipkart, github, linkedin, chatgpt, claude, stack overflow]

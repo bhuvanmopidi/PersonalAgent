@@ -53,6 +53,25 @@ class TerminalConfirmer:
         return answer.strip().lower() != "cancel"
 
 
+class Announcer(Protocol):
+    async def say(self, text: str, wait: bool = False) -> None: ...
+
+
+class SpokenConfirmer:
+    """Speaks the prompt aloud, then asks the inner confirmer (typed now, voice from Phase 4)."""
+
+    def __init__(self, inner: Confirmer, speaker: Announcer) -> None:
+        self.inner, self.speaker = inner, speaker
+
+    async def confirm(self, prompt: str) -> bool:
+        await self.speaker.say(prompt)
+        return await self.inner.confirm(prompt)
+
+    async def handoff(self, message: str) -> bool:
+        await self.speaker.say(message)
+        return await self.inner.handoff(message)
+
+
 class ScriptedConfirmer:
     """Pre-programmed answers, for tests and evals. Records every prompt it was shown."""
 

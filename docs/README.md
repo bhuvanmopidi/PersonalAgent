@@ -14,4 +14,6 @@
 | 0 | Project scaffold | ✅ Done | [phase-00-scaffold.md](phases/phase-00-scaffold.md) |
 | 1 | Core models + safety layer | ✅ Done | [phase-01-safety.md](phases/phase-01-safety.md) |
 | 2 | Tier-1 instant tools | ✅ Done | [phase-02-instant.md](phases/phase-02-instant.md) |
-| 3–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |
+| 3 | Voice out (TTS) | ✅ Done | [phase-03-tts.md](phases/phase-03-tts.md) |
+| 4 | Voice in (wake word, VAD, streaming STT) | ⏳ Next | — |
+| 5–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |

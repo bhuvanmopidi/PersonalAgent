@@ -1,4 +1,4 @@
-"""CLI entry: jarvis do "…" | repl | apps | demo-safety | run."""
+"""CLI entry: jarvis do "…" | repl | say | voices | apps | demo-safety | run."""
 
 from __future__ import annotations
 
@@ -40,31 +40,72 @@ def _print_outcome(outcome: Outcome) -> None:
     print(f"  route {outcome.route_ms:.1f} ms · action {r.duration_ms:.0f} ms")
 
 
-async def do(text: str, verbose: bool) -> bool:
+async def do(text: str, verbose: bool, mute: bool) -> bool:
     from jarvis.agent import Agent
 
     settings = load_settings()
     setup_logging("INFO" if verbose else "WARNING")
-    outcome = await Agent.create(settings).handle(text)
+    agent = Agent.create(settings, mute=mute)
+    outcome = await agent.handle(text)
     _print_outcome(outcome)
+    await agent.speaker.wait()  # let it finish speaking before the process exits
     return outcome.result.ok
 
 
-async def repl(verbose: bool) -> None:
+async def repl(verbose: bool, mute: bool) -> None:
     from jarvis.agent import Agent
 
     settings = load_settings()
     setup_logging("INFO" if verbose else "WARNING")
-    agent = Agent.create(settings)
+    agent = Agent.create(settings, mute=mute)
     prewarm = asyncio.create_task(agent.prewarm())
     print("Jarvis (typed mode). Type a command, or 'exit'. Esc stops a running task.")
     while True:
         text = (await asyncio.to_thread(input, "> ")).strip()
         if text.lower() in {"exit", "quit", "bye"}:
+            agent.speaker.stop()
             break
         if text:
             await prewarm
             _print_outcome(await agent.handle(text))
+
+
+async def say(text: str, engine: str | None) -> None:
+    import time
+
+    from jarvis.voice.audio import SoundDeviceSink
+    from jarvis.voice.speaker import Speaker
+    from jarvis.voice.tts import LazyEngine, create_engine
+
+    settings = load_settings()
+    setup_logging(settings.log_level)
+    tts = settings.tts
+    tts_engine = create_engine(engine or tts.engine, tts.voice, tts.speed)
+    if isinstance(tts_engine, LazyEngine):
+        start = time.perf_counter()
+        await asyncio.to_thread(tts_engine.prewarm)
+        print(f"  model load + warm-up: {(time.perf_counter() - start) * 1000:.0f} ms")
+    speaker = Speaker(tts_engine, SoundDeviceSink())
+    await speaker.say(text, wait=True)
+    if speaker.last_first_audio_ms is not None:
+        print(f"  time to first audio: {speaker.last_first_audio_ms:.0f} ms")
+
+
+def voices(action: str, name: str | None) -> None:
+    from jarvis.voice import voices as v
+
+    if action == "list":
+        downloaded = set(v.list_downloaded())
+        for voice in v.list_available():
+            print(f"{'*' if voice in downloaded else ' '} {voice}")
+        print("\n* = downloaded")
+        return
+    voice = name or load_settings().tts.voice
+    if v.is_downloaded(voice):
+        print(f"{voice} is already downloaded: {v.voice_path(voice)}")
+        return
+    print(f"Downloading {voice} …")
+    print(f"Saved to {v.download(voice)}")
 
 
 def apps(query: str | None, refresh: bool) -> None:
@@ -88,8 +129,16 @@ def cli(argv: list[str] | None = None) -> None:
     p_do = sub.add_parser("do", help='run one typed command, e.g. jarvis do "open notepad"')
     p_do.add_argument("text", nargs="+")
     p_do.add_argument("-v", "--verbose", action="store_true", help="show policy/debug logs")
+    p_do.add_argument("--mute", action="store_true", help="don't speak")
     p_repl = sub.add_parser("repl", help="type commands in a loop")
     p_repl.add_argument("-v", "--verbose", action="store_true")
+    p_repl.add_argument("--mute", action="store_true", help="don't speak")
+    p_say = sub.add_parser("say", help="speak a sentence (tests text-to-speech)")
+    p_say.add_argument("text", nargs="+")
+    p_say.add_argument("--engine", choices=["piper", "sapi"])
+    p_voices = sub.add_parser("voices", help="list or download Piper voices")
+    p_voices.add_argument("action", choices=["list", "download"])
+    p_voices.add_argument("name", nargs="?", help="e.g. en_US-lessac-medium (default: settings)")
     p_apps = sub.add_parser("apps", help="list installed apps, or test what a name resolves to")
     p_apps.add_argument("query", nargs="?")
     p_apps.add_argument("--refresh", action="store_true", help="rebuild the app index")
@@ -99,9 +148,13 @@ def cli(argv: list[str] | None = None) -> None:
     if args.command == "run":
         asyncio.run(run())
     elif args.command == "do":
-        raise SystemExit(0 if asyncio.run(do(" ".join(args.text), args.verbose)) else 1)
+        raise SystemExit(0 if asyncio.run(do(" ".join(args.text), args.verbose, args.mute)) else 1)
     elif args.command == "repl":
-        asyncio.run(repl(args.verbose))
+        asyncio.run(repl(args.verbose, args.mute))
+    elif args.command == "say":
+        asyncio.run(say(" ".join(args.text), args.engine))
+    elif args.command == "voices":
+        voices(args.action, args.name)
     elif args.command == "apps":
         apps(args.query, args.refresh)
     elif args.command == "demo-safety":

@@ -5,6 +5,8 @@ description = "Voice-controlled computer-use agent for Windows"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "numpy>=2.5.4",
+    "piper-tts>=1.8.0",
     "psutil>=7.2.2",
     "pycaw>=20260927",
     "pydantic>=2.7",
@@ -12,6 +14,7 @@ dependencies = [
     "pyyaml>=6.0",
     "rapidfuzz>=3.14.6",
     "screen-brightness-control>=0.27.2",
+    "sounddevice>=0.5.6",
 ]
 
 [project.scripts]
@@ -48,7 +51,7 @@ strict = true
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["pycaw.*", "screen_brightness_control.*"]
+module = ["pycaw.*", "screen_brightness_control.*", "sounddevice", "win32com.*", "pythoncom"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

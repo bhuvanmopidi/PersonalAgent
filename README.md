@@ -4,8 +4,8 @@ Speak a task; Jarvis does it on your PC like a human would — across the browse
 Fast paths first (instant intents → learned skills), a general accessibility-tree LLM agent for new
 tasks, and a vision fallback for everything else. Local-first, with human checkpoints for risky actions.
 
-> Status: Phase 2 done (typed Tier-1 commands: apps, sites, search, volume, brightness, folders,
-> files, lock). Next: Phase 3, text-to-speech.
+> Status: Phase 3 done (typed Tier-1 commands; Jarvis speaks while acting with a local Piper voice).
+> Next: Phase 4, voice input.
 > Docs: [docs/](docs/README.md)
 
 ## Setup
@@ -17,6 +17,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 # 2. Install Python 3.12 + dependencies
 uv python install 3.12
 uv sync
+uv run jarvis voices download      # local Piper voice (~60 MB); optional, falls back to Windows SAPI
 
 # 3. Run
 uv run jarvis --version

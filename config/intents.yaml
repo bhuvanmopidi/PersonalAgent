@@ -2,6 +2,8 @@
 # Text is normalized first ("Hey Jarvis, please open Spotify!" → "open spotify"), then each pattern
 # is tried with fullmatch, in file order — put specific intents BEFORE generic ones (open_app last).
 # Named groups become slots; {slot} fills action templates, {slot|url} URL-encodes it.
+# speak: description (default, said while acting) | result (say the outcome) | none.
+# Failures are always spoken.
 
 intents:
   # ---- media / web ----
@@ -22,6 +24,7 @@ intents:
 
   # ---- volume ----
   - name: volume_up
+    speak: result          # say the new level, e.g. "Volume 60%"
     description: "Volume up"
     defaults: { value: "10" }
     patterns:
@@ -31,6 +34,7 @@ intents:
     action: { kind: set_volume, target: speakers, args: { mode: up, value: '{value}' } }
 
   - name: volume_down
+    speak: result          # say the new level, e.g. "Volume 60%"
     description: "Volume down"
     defaults: { value: "10" }
     patterns:
@@ -57,6 +61,7 @@ intents:
 
   # ---- brightness ----
   - name: brightness_up
+    speak: result          # say the new level, e.g. "Volume 60%"
     description: "Brightness up"
     defaults: { value: "10" }
     patterns:
@@ -66,6 +71,7 @@ intents:
     action: { kind: set_brightness, target: display, args: { mode: up, value: '{value}' } }
 
   - name: brightness_down
+    speak: result          # say the new level, e.g. "Volume 60%"
     description: "Brightness down"
     defaults: { value: "10" }
     patterns:
@@ -102,10 +108,13 @@ intents:
   # ---- apps (generic — keep last) ----
   - name: close_app
     description: "Closing {app}"
-    patterns: ['(?:close|quit|exit|kill) (?:the )?(?P<app>.+?)(?: app)?']
+    patterns: ['(?:close|quit|exit|kill) (?:the |my )?(?P<app>.+?)(?: app)?']
     action: { kind: close_app, target: '{app}' }
 
   - name: open_app
     description: "Opening {app}"
-    patterns: ['(?:open|launch|start|go to) (?:the )?(?P<app>.+?)(?: app| website| site)?']
-    action: { kind: launch_app, target: '{app}' }
+    # "open up me the instagram website" → app=instagram, prefer=website ("app"/"website" kept as a hint)
+    patterns:
+      - '(?:open|launch|start|go to)(?: up)?(?: me)?(?: the| my)? (?P<app>.+?)(?: (?P<prefer>app|website|site))?'
+    defaults: { prefer: auto }
+    action: { kind: launch_app, target: '{app}', args: { prefer: '{prefer}' } }

@@ -77,6 +77,18 @@ kill switch. `OSExecutor` handles `launch_app`, `close_app`, `open_url`, `set_vo
 Start-menu app and are launched via `shell:AppsFolder`. Details:
 [phases/phase-02-instant.md](phases/phase-02-instant.md).
 
+## Voice out (built in Phase 3)
+
+```
+Agent ──say(text)──► Speaker (background, newest-wins, phrase cache, redaction)
+                        └─ worker thread: TTSEngine.synthesize → AudioSink.play (50 ms blocks)
+                           engines: Piper (local neural) · SAPI (built-in fallback)
+```
+
+The agent speaks the intent's description while the action runs, the result for level changes, and
+any failure. Confirmations are spoken through `SpokenConfirmer`. Details:
+[phases/phase-03-tts.md](phases/phase-03-tts.md).
+
 ## Cross-cutting pieces
 
 | Piece | File | Purpose |
@@ -92,4 +104,5 @@ Start-menu app and are launched via `shell:AppsFolder`. Details:
 | Scaffold, config, logging, metrics | ✅ Phase 0 |
 | Models, safety policy, confirmations, kill switch, redaction, ActionRunner | ✅ Phase 1 |
 | Regex router, Tier-1 OS tools (apps, URLs, volume, brightness, folders, files, lock), typed CLI | ✅ Phase 2 |
-| Voice, browser, desktop app flows, AI agents, skills, memory | Planned |
+| Text-to-speech: Piper + SAPI fallback, speak-while-acting, spoken confirmations | ✅ Phase 3 |
+| Voice input, browser, desktop app flows, AI agents, skills, memory | Planned |

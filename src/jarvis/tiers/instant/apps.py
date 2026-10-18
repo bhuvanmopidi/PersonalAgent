@@ -9,18 +9,20 @@ import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import psutil
 import yaml
 from pydantic import BaseModel, Field
+from rapidfuzz import fuzz
 
 from jarvis.config import CONFIG_DIR
-from jarvis.tiers.instant.app_index import AppIndex
+from jarvis.tiers.instant.app_index import AppEntry, AppIndex, Quality, best_match
 
 ALIASES_PATH = CONFIG_DIR / "apps" / "aliases.yaml"
 REFRESH_COOLDOWN_S = 300
 _DOMAIN = re.compile(r"^(?:https?://)?(?:[\w-]+\.)+[a-z]{2,}(?:/\S*)?$")
+_RANK: dict[Quality, int] = {"exact": 0, "prefix": 1, "fuzzy": 2}
 
 # Never closed by the agent: Windows itself, and anything Jarvis runs inside.
 _PROTECTED = {
@@ -39,6 +41,17 @@ class AppAlias(BaseModel):
 class AliasConfig(BaseModel):
     apps: dict[str, AppAlias] = Field(default_factory=dict)
     sites: dict[str, str] = Field(default_factory=dict)
+    # sites that open in the browser even if a same-named app is installed (e.g. GitHub Desktop)
+    prefer_web: list[str] = Field(default_factory=list)
+
+
+Prefer = Literal["auto", "app", "web"]
+_PREFER = {"app": "app", "website": "web", "site": "web", "web": "web"}
+
+
+def parse_prefer(value: str) -> Prefer:
+    """'app' / 'website' / 'site' from the command → a resolve preference; anything else = auto."""
+    return cast(Prefer, _PREFER.get(value.lower().strip(), "auto"))
 
 
 def load_aliases(path: Path = ALIASES_PATH) -> AliasConfig:
@@ -75,35 +88,70 @@ class AppLauncher:
     def prewarm(self) -> None:
         _ = self.index
 
-    def resolve(self, query: str) -> LaunchPlan | None:
-        """alias → website alias → installed app → exe on PATH → domain → not found."""
+    def resolve(self, query: str, prefer: Prefer = "auto") -> LaunchPlan | None:
+        """Decide what "open <query>" means: an installed app, a website, a URI or an exe.
+
+        prefer="web" (user said "website"/"site") → websites only.
+        prefer="app" (user said "app")            → apps only.
+        prefer="auto": a typed domain wins; then app/command aliases; then the better match,
+        best first: exact app · exact site · prefix app · prefix site · fuzzy app · fuzzy site
+        (so an installed WhatsApp beats web.whatsapp.com, but "insta" still finds the site).
+        Sites listed in prefer_web win over same-named apps.
+        """
         q = query.lower().strip()
+        if not q:
+            return None
+        if _DOMAIN.match(q) and prefer != "app":
+            return LaunchPlan(
+                kind="url", value=q if q.startswith("http") else f"https://{q}", display=q
+            )
+
         alias = self.aliases.apps.get(q)
-        if alias and alias.uri:
+        if prefer != "web" and alias and alias.uri:
             return LaunchPlan(kind="uri", value=alias.uri, display=q)
-        if alias and alias.command:
-            path = shutil.which(alias.command) or alias.command
-            return LaunchPlan(kind="command", value=path, display=q)
-        if q in self.aliases.sites:
-            return LaunchPlan(kind="url", value=self.aliases.sites[q], display=q)
+        if prefer != "web" and alias and alias.command:
+            return LaunchPlan(
+                kind="command", value=shutil.which(alias.command) or alias.command, display=q
+            )
+
+        site = None if prefer == "app" else self._find_site(q)
+        prefers_web = site is not None and site[1] == "exact" and site[0] in self.aliases.prefer_web
+        if site and (prefer == "web" or prefers_web):
+            return self._site_plan(site[0])
+        if prefer == "web":
+            return None
 
         name = alias.name if alias and alias.name else q
-        entry = self.index.find(name)
-        if entry is None and time.monotonic() - self._last_refresh > REFRESH_COOLDOWN_S:
+        app = self._find_app(name, retry=site is None)
+        candidates: list[tuple[int, LaunchPlan]] = []
+        if app:
+            entry, quality = app
+            plan = LaunchPlan(kind="app", value=entry.app_id, display=entry.name)
+            candidates.append((_RANK[quality] * 2, plan))
+        if site:
+            candidates.append((_RANK[site[1]] * 2 + 1, self._site_plan(site[0])))
+        if candidates:
+            return min(candidates, key=lambda c: c[0])[1]
+
+        exe = shutil.which(name)
+        return LaunchPlan(kind="command", value=exe, display=name) if exe else None
+
+    def _find_site(self, q: str) -> tuple[str, Quality] | None:
+        # whole-string similarity only: "instagarm" → instagram, but "xbox" must not hit "x"
+        return best_match(q, list(self.aliases.sites), scorer=fuzz.ratio)
+
+    def _site_plan(self, name: str) -> LaunchPlan:
+        return LaunchPlan(kind="url", value=self.aliases.sites[name], display=name)
+
+    def _find_app(self, name: str, retry: bool) -> tuple[AppEntry, Quality] | None:
+        found = self.index.find_scored(name)
+        cooled = time.monotonic() - self._last_refresh > REFRESH_COOLDOWN_S
+        if found is None and retry and cooled:
             # maybe installed after the cache was built (~2 s, so at most every few minutes)
             self._last_refresh = time.monotonic()
             self._index = self._index_loader(refresh=True)
-            entry = self._index.find(name)
-        if entry:
-            return LaunchPlan(kind="app", value=entry.app_id, display=entry.name)
-
-        exe = shutil.which(name)
-        if exe:
-            return LaunchPlan(kind="command", value=exe, display=name)
-        if _DOMAIN.match(q):
-            url = q if q.startswith("http") else f"https://{q}"
-            return LaunchPlan(kind="url", value=url, display=q)
-        return None
+            found = self._index.find_scored(name)
+        return found
 
     def launch(self, plan: LaunchPlan) -> None:
         # ShellExecute handles all four: shell:AppsFolder IDs, URIs, exes (incl. UAC), URLs.

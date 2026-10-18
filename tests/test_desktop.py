@@ -21,6 +21,25 @@ async def test_open_and_close_notepad() -> None:
     assert closed.result.ok, closed.result.observation
 
 
+def test_piper_synthesizes() -> None:
+    from jarvis.voice.tts import PiperEngine
+    from jarvis.voice.voices import is_downloaded, voice_path
+
+    voice = load_settings().tts.voice
+    if not is_downloaded(voice):
+        pytest.skip(f"run: jarvis voices download {voice}")
+    chunks = list(PiperEngine(voice_path(voice)).synthesize("Opening Spotify. Volume up."))
+    assert len(chunks) >= 1 and sum(len(c.samples) for c in chunks) > 10_000
+    assert all(c.samples.min() >= -1.0 and c.samples.max() <= 1.0 for c in chunks)
+
+
+def test_sapi_synthesizes() -> None:
+    from jarvis.voice.tts import SapiEngine
+
+    (audio,) = SapiEngine().synthesize("Opening Spotify")
+    assert audio.sample_rate == 22050 and len(audio.samples) > 10_000
+
+
 async def test_volume_set_and_restore() -> None:
     volume = Volume()
     original = volume.get()

@@ -9,6 +9,11 @@ router:
   embedding_match_threshold: 0.85   # Tier-2 skill match (Phase 14)
   classifier_threshold: 0.8         # small classifier confidence (Phase 14)
 
+tts:
+  engine: piper                     # piper | sapi (built-in Windows voice) | none
+  voice: en_US-lessac-medium        # jarvis voices download
+  speed: 1.0                        # >1 faster, <1 slower
+
 llm:
   provider: anthropic               # swappable: anthropic | ollama (Phase 7)
   model: claude-opus-5-5

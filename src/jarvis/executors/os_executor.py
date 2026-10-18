@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Protocol
 
 from jarvis.models import Action, ActionResult
-from jarvis.tiers.instant.apps import LaunchPlan
+from jarvis.tiers.instant.apps import LaunchPlan, Prefer, parse_prefer
 
 
 class Launcher(Protocol):
-    def resolve(self, query: str) -> LaunchPlan | None: ...
+    def resolve(self, query: str, prefer: Prefer = "auto") -> LaunchPlan | None: ...
     def launch(self, plan: LaunchPlan) -> None: ...
     def close(self, query: str) -> list[str]: ...
 
@@ -97,9 +97,11 @@ class OSExecutor:
 
     async def _launch_app(self, action: Action) -> ActionResult:
         # resolve may rebuild the app index (~1 s) — keep it off the event loop
-        plan = await asyncio.to_thread(self.launcher.resolve, action.target)
+        prefer = parse_prefer(str(action.args.get("prefer", "")))
+        plan = await asyncio.to_thread(self.launcher.resolve, action.target, prefer)
         if plan is None:
-            return fail("not_found", f"I couldn't find an app or site called '{action.target}'")
+            what = {"app": "an app", "web": "a website"}.get(prefer, "an app or site")
+            return fail("not_found", f"I couldn't find {what} called '{action.target}'")
         self.launcher.launch(plan)
         return ok(f"Opened {plan.display}")
 

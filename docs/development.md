@@ -6,6 +6,7 @@
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # once
 uv python install 3.12
 uv sync
+uv run jarvis voices download     # Piper voice, ~60 MB (optional: falls back to Windows SAPI)
 ```
 
 In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → *Python: Select Interpreter*).
@@ -16,8 +17,10 @@ In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → 
 |---|---|
 | `uv run jarvis --version` | Print the version |
 | `uv run jarvis run` | Start the agent (a stub until the voice loop is added) |
-| `uv run jarvis repl [-v]` | Type commands in a loop (`-v` shows policy logs) |
-| `uv run jarvis do "open notepad"` | Run one command |
+| `uv run jarvis repl [-v] [--mute]` | Type commands in a loop (`-v` shows policy logs) |
+| `uv run jarvis do "open notepad" [--mute]` | Run one command |
+| `uv run jarvis say "hello" [--engine sapi]` | Speak a sentence; prints load and time-to-first-audio |
+| `uv run jarvis voices list` / `download [name]` | Piper voices (default voice from settings) |
 | `uv run jarvis apps [name] [--refresh]` | List apps / see what a name resolves to / rebuild the index |
 | `uv run jarvis demo-safety` | Run fake actions through the safety layer |
 | `uv run pytest` | Run the unit tests (no side effects) |
@@ -42,8 +45,9 @@ src/jarvis/
   router/          regex_router.py (Tier-1 intents)
   executors/       base.py (ActionRunner), os_executor.py
   tiers/instant/   app_index, apps, system, files, mapper
+  voice/           tts (Piper, SAPI), audio (output), speaker, voices (download)
   telemetry/       logging, metrics
-  voice/ planner/ tiers/{skills,structured,vision}/ apps/ memory/   (later phases)
+  planner/ tiers/{skills,structured,vision}/ apps/ memory/   (later phases)
 docs/              this documentation
 evals/             eval tasks (Phase 16 runner)
 tests/             pytest suite (conftest.py has shared fixtures)
@@ -56,7 +60,8 @@ tests/             pytest suite (conftest.py has shared fixtures)
    `config/safety.yaml` (it is YELLOW until you do).
 3. Add the utterance to `tests/test_regex_router.py` and a task to `evals/tasks.yaml`.
 
-App nicknames and websites go in `config/apps/aliases.yaml`.
+App nicknames and websites go in `config/apps/aliases.yaml`. Add a site to `prefer_web` if it
+should open in the browser even when a same-named app is installed.
 
 ## Conventions
 
