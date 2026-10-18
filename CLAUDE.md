@@ -78,6 +78,7 @@ Log every route + outcome → becomes classifier training data.
 - 🟢 Auto: open apps, play media, search, read.
 - 🟡 Confirm first (read back full details incl. exact email address/file/price): send messages/emails, submit forms, delete/move files, place orders.
 - 💳 **One-tap checkout:** the agent may click **Pay** only after a spoken + on-screen confirmation of item, quantity, price, delivery address and payment method. It uses only payment methods already saved on the site. It **never stores** card numbers, CVV or UPI PIN. **OTP / UPI PIN / 3-D Secure are always entered by the user.**
+- **Risk is judged per step, at execution time, never per task.** Layers (each can only *raise* risk; final = strictest): action kind → UI label keywords → structural facts (UIA `IsPassword`, `type=password`, CAPTCHA iframes, checkout URLs) → per-app risky shortcuts → AI risk judge → learned classifier. Only an allowlist can yield GREEN; anything unrecognised is confirmed. Errors must cost a confirmation, never data. Contain damage too: no admin, reversible deletes, previews, kill switch.
 - 🔴 Always hand control to user: **OTPs, UPI PINs, passwords, logins, CAPTCHAs / any "verify you are human" check**, system settings changes.
 - **Never auto-solve CAPTCHAs.** Detect (iframes from recaptcha / hcaptcha / challenges.cloudflare.com, or vision sees the check) → pause & save state → bring window to front + speak/notify → wait until it disappears → resume. Minimize them by using the user's real logged-in Chrome profile via CDP, never headless, human-paced actions.
 - Global **kill hotkey (Esc)** stops the agent instantly. Mic stays live during execution so "stop" / corrections can interrupt.
@@ -160,12 +161,14 @@ PersonalAgent/
 | 8 | Gmail flow | compose/attach/read-back/confirm/send |
 | 9 | Spotify via UIA | pywinauto + `spotify:search:` |
 | 10 | Word dictation via COM | live typing + dictation commands |
-| 11 | Tier-3 structured agent | UIA/DOM observer, batched See→Think→Act→Check |
+| 11 | Tier-3 structured agent | UIA/DOM observer, batched See→Think→Act→Check; **AI risk judge** (raise-only); per-app risky shortcuts |
+| 11b | Shell commands | `run_command` kind: PowerShell AST parsing + alias resolution, verb semantics, read-only allowlist → GREEN, else confirm, obfuscation → refuse, source tracking (untrusted screen content never auto), no admin, `-WhatIf` previews, Recycle Bin deletes |
 | 12 | Skills (Tier 2) | learn, replay, retire |
 | 13 | Storage | SQLCipher + DPAPI, sqlite-vec, history |
 | 14 | Router cascade | context resolution, embeddings, classifier, decomposer |
+| 14b | Learned risk classifier | synthetic + public + adversarial + logged data; embeddings baseline → fine-tuned MiniLM (ONNX, <10 ms); optimise ≥99% recall on PAYMENT/RED; raise-only |
 | 15 | Tier-4 vision | mss + OmniParser + vision LLM |
-| 16 | Eval suite + Tauri UI | ~50 tasks, metrics; tray app |
+| 16 | Eval suite + Tauri UI | ~50 tasks, metrics; **adversarial safety evals** (miss rate per layer: rules vs judge vs classifier vs ensemble); tray app |
 | Later | Indian-language voice, fine-tuned router, fine-tuned UI-grounding model |
 
 ## 11. Coding conventions

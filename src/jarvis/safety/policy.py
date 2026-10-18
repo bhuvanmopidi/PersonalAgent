@@ -44,6 +44,7 @@ class SafetyRules(BaseModel):
     kinds: RiskLists = RiskLists()
     keywords: RiskLists = RiskLists()
     flags: RiskLists = RiskLists()
+    keyword_kinds: list[str] = Field(default_factory=list)  # kinds whose target is a UI label
     payment_required_fields: list[str] = Field(default_factory=list)
 
 
@@ -76,12 +77,14 @@ class SafetyPolicy:
 
     def classify(self, action: Action) -> tuple[RiskLevel, list[str]]:
         """Return the action's risk level and the reasons that set it."""
+        is_known = action.kind in self._kind_risk
         risk = self._kind_risk.get(action.kind, RiskLevel.YELLOW)
-        known = "" if action.kind in self._kind_risk else " (unknown kind)"
-        reasons = [f"kind '{action.kind}' is {risk.name}{known}"]
+        reasons = [f"kind '{action.kind}' is {risk.name}{'' if is_known else ' (unknown kind)'}"]
 
+        # labels of UI elements carry risk ("Delete forever"); user-built targets like URLs don't
+        check_keywords = not is_known or action.kind in self.rules.keyword_kinds
         for pattern, keyword, level in self._keyword_patterns:
-            if level > risk and pattern.search(action.target):
+            if check_keywords and level > risk and pattern.search(action.target):
                 risk = level
                 reasons.append(f"target matches '{keyword}' ({level.name})")
 

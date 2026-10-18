@@ -3,14 +3,23 @@
 # Unknown action kinds default to yellow (confirm).
 
 kinds:
-  green: [launch_app, open_url, hotkey, type_text, click, scroll, read, search, play_media, wait]
+  green:
+    [launch_app, close_app, open_url, open_folder, find_file, set_volume, set_brightness,
+     lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait]
   yellow: [send, submit_form, delete_file, move_file, place_order]
   payment: [pay]
   red: [enter_password, enter_otp, login, solve_captcha, change_system_setting]
 
-# Matched as whole words/phrases (case-insensitive) against the action's target (UI label).
+# Keywords are matched against the target (the UI label being acted on) only for these kinds —
+# plus any unknown kind. Not for e.g. open_url, whose target is a URL built from the user's words.
+keyword_kinds: [click, hotkey, press_key, submit_form]
+
+# Matched as whole words/phrases (case-insensitive).
 keywords:
-  yellow: [send, submit, delete, remove, place order, buy now, confirm order]
+  yellow:
+    [send, submit, delete, remove, place order, buy now, confirm order, confirm, permanently,
+     cancel membership, cancel subscription, cancel plan, unsubscribe, deactivate, close account,
+     delete account, transfer, finish cancellation, uninstall, reset]
   payment: [pay now, proceed to pay, place your order and pay, complete payment, make payment]
   red: [password, otp, one-time password, upi pin, cvv, sign in, log in, verify you are human, captcha]
 

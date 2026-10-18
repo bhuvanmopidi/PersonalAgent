@@ -1,0 +1,44 @@
+# What people say → what to open. Keys are lowercase.
+# apps:  name    = Start-menu name to look up in the app index
+#        process = exe name without .exe (used by "close X")
+#        uri     = open this URI instead (ms-settings:, spotify:, …)
+#        command = exe on PATH
+# sites: name → URL (checked before the app index)
+
+apps:
+  chrome: { name: Google Chrome, process: chrome }
+  google chrome: { name: Google Chrome, process: chrome }
+  edge: { name: Microsoft Edge, process: msedge }
+  vs code: { name: Visual Studio Code, process: Code }
+  vscode: { name: Visual Studio Code, process: Code }
+  word: { name: Word, process: WINWORD }
+  excel: { name: Excel, process: EXCEL }
+  powerpoint: { name: PowerPoint, process: POWERPNT }
+  outlook: { name: Outlook, process: OUTLOOK }
+  calculator: { name: Calculator, process: CalculatorApp }
+  calc: { name: Calculator, process: CalculatorApp }
+  notepad: { name: Notepad, process: Notepad }
+  paint: { name: Paint, process: mspaint }
+  spotify: { name: Spotify, process: Spotify }
+  terminal: { name: Terminal, process: WindowsTerminal }
+  settings: { uri: "ms-settings:" }
+  file explorer: { command: explorer.exe }
+  explorer: { command: explorer.exe }
+  task manager: { command: taskmgr.exe, process: Taskmgr }
+  command prompt: { command: cmd.exe }
+  cmd: { command: cmd.exe }
+
+sites:
+  youtube: https://www.youtube.com
+  gmail: https://mail.google.com
+  google: https://www.google.com
+  amazon: https://www.amazon.in
+  flipkart: https://www.flipkart.com
+  github: https://github.com
+  linkedin: https://www.linkedin.com
+  whatsapp: https://web.whatsapp.com
+  instagram: https://www.instagram.com
+  netflix: https://www.netflix.com
+  chatgpt: https://chatgpt.com
+  claude: https://claude.ai
+  stack overflow: https://stackoverflow.com

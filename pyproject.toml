@@ -5,9 +5,13 @@ description = "Voice-controlled computer-use agent for Windows"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "psutil>=7.2.2",
+    "pycaw>=20260927",
     "pydantic>=2.7",
     "pynput>=1.8.2",
     "pyyaml>=6.0",
+    "rapidfuzz>=3.14.6",
+    "screen-brightness-control>=0.27.2",
 ]
 
 [project.scripts]
@@ -21,6 +25,7 @@ dev = [
     "mypy>=1.10",
     "types-pyyaml>=6.0",
     "types-pynput>=1.8.1.20260712",
+    "types-psutil>=7.2.2.20260906",
 ]
 
 [build-system]
@@ -42,6 +47,12 @@ python_version = "3.12"
 strict = true
 mypy_path = "src"
 
+[[tool.mypy.overrides]]
+module = ["pycaw.*", "screen_brightness_control.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["desktop: touches the real desktop (launches apps, changes volume); run with -m desktop"]
+addopts = "-m 'not desktop'"

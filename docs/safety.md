@@ -23,6 +23,11 @@ risk = max( risk of action.kind,             # unknown kind → YELLOW
 - **Keywords are matched as whole words, case-insensitively.** "Send" matches; "Sender settings" does not.
 - **Keywords are checked against `target` only, never typed text.** Dictating "send the password"
   into Word is not treated as a risky action.
+- **Keywords apply only to kinds whose target is a UI label** (`keyword_kinds`: click, hotkey,
+  press_key, submit_form), **plus any unknown kind**. For `open_url` the target is a URL built from
+  your own words, so "google how to delete my account" stays GREEN.
+- "Irreversible" labels are YELLOW: cancel membership/subscription, unsubscribe, deactivate,
+  close/delete account, transfer, confirm, uninstall, reset, permanently.
 - Every decision records its `reasons`, for example `["kind 'click' is GREEN", "target matches 'pay now' (PAYMENT)"]`.
   These are logged on every action.
 
@@ -77,6 +82,19 @@ Voice and on-screen confirmers will implement the same protocol in later phases.
 | PAN | `ABCDE1234F` pattern | `[PAN]` |
 
 Emails and phone numbers are **kept** on purpose, because the agent needs them for contacts and read-backs.
+
+## Planned layers
+
+Each one can only *raise* risk:
+
+| Layer | Phase |
+|---|---|
+| URL rules (checkout pages, payment gateways) | 5 |
+| Per-app risky shortcuts (e.g. Gmail Ctrl+Enter = send), focused-element check | 11 |
+| AI risk judge | 11 |
+| Shell commands: PowerShell AST, verb semantics, allowlist, obfuscation → refuse | 11b |
+| Learned risk classifier (≥99% recall on PAYMENT/RED) | 14b |
+| Adversarial safety evals (miss rate per layer) | 16 |
 
 ## Try it
 

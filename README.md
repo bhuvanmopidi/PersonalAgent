@@ -4,7 +4,8 @@ Speak a task; Jarvis does it on your PC like a human would — across the browse
 Fast paths first (instant intents → learned skills), a general accessibility-tree LLM agent for new
 tasks, and a vision fallback for everything else. Local-first, with human checkpoints for risky actions.
 
-> Status: Phase 1 done (core models + safety layer). Next: Phase 2, Tier-1 instant tools.
+> Status: Phase 2 done (typed Tier-1 commands: apps, sites, search, volume, brightness, folders,
+> files, lock). Next: Phase 3, text-to-speech.
 > Docs: [docs/](docs/README.md)
 
 ## Setup
@@ -19,8 +20,9 @@ uv sync
 
 # 3. Run
 uv run jarvis --version
-uv run jarvis run
-uv run jarvis demo-safety   # see the safety layer in action
+uv run jarvis repl                 # type commands: "open spotify", "volume 30", "find my resume"
+uv run jarvis do "play lofi on youtube"
+uv run jarvis demo-safety          # see the safety layer in action
 ```
 
 ## Development

@@ -64,6 +64,19 @@ KillSwitch.guard(task) — Esc cancels the running task at any point
 Executors are never called directly. This is how the rule "every risky action goes through
 the safety policy" is enforced in code. Details: [safety.md](safety.md).
 
+## Tier 1 (built in Phase 2)
+
+```
+text → normalize → RegexRouter (config/intents.yaml) → Intent
+     → to_action (template) → Action → ActionRunner → OSExecutor
+```
+
+`Agent.handle(text)` in `src/jarvis/agent.py` wires these together and runs each command under the
+kill switch. `OSExecutor` handles `launch_app`, `close_app`, `open_url`, `set_volume`,
+`set_brightness`, `open_folder`, `find_file` and `lock_screen`. Apps come from a cached index of every
+Start-menu app and are launched via `shell:AppsFolder`. Details:
+[phases/phase-02-instant.md](phases/phase-02-instant.md).
+
 ## Cross-cutting pieces
 
 | Piece | File | Purpose |
@@ -78,4 +91,5 @@ the safety policy" is enforced in code. Details: [safety.md](safety.md).
 |---|---|
 | Scaffold, config, logging, metrics | ✅ Phase 0 |
 | Models, safety policy, confirmations, kill switch, redaction, ActionRunner | ✅ Phase 1 |
-| Router, executors, voice, browser, desktop apps, agents, memory | Planned |
+| Regex router, Tier-1 OS tools (apps, URLs, volume, brightness, folders, files, lock), typed CLI | ✅ Phase 2 |
+| Voice, browser, desktop app flows, AI agents, skills, memory | Planned |

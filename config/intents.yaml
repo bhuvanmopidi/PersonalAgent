@@ -1,3 +1,111 @@
-# Tier-1 regex intents. Filled in Phase 2.
-# Each entry: { name, pattern, action, args }
-intents: []
+# Tier-1 regex intents.
+# Text is normalized first ("Hey Jarvis, please open Spotify!" → "open spotify"), then each pattern
+# is tried with fullmatch, in file order — put specific intents BEFORE generic ones (open_app last).
+# Named groups become slots; {slot} fills action templates, {slot|url} URL-encodes it.
+
+intents:
+  # ---- media / web ----
+  - name: youtube_search
+    description: "Searching YouTube for {query}"
+    patterns:
+      - '(?:play|search(?: for)?|find|look up) (?P<query>.+?) on youtube'
+      - '(?:search )?(?:on )?youtube (?:for )?(?P<query>.+)'
+    action: { kind: open_url, target: 'https://www.youtube.com/results?search_query={query|url}' }
+
+  - name: web_search
+    description: "Searching the web for {query}"
+    patterns:
+      - 'google (?P<query>.+)'
+      - 'search (?:google|the web|online) for (?P<query>.+)'
+      - 'search for (?P<query>.+)'
+    action: { kind: open_url, target: 'https://www.google.com/search?q={query|url}' }
+
+  # ---- volume ----
+  - name: volume_up
+    description: "Volume up"
+    defaults: { value: "10" }
+    patterns:
+      - '(?:turn )?(?:the )?volume up(?: by (?P<value>\d{1,3})(?: ?%| percent)?)?'
+      - '(?:increase|raise) (?:the )?volume(?: by (?P<value>\d{1,3})(?: ?%| percent)?)?'
+      - 'louder'
+    action: { kind: set_volume, target: speakers, args: { mode: up, value: '{value}' } }
+
+  - name: volume_down
+    description: "Volume down"
+    defaults: { value: "10" }
+    patterns:
+      - '(?:turn )?(?:the )?volume down(?: by (?P<value>\d{1,3})(?: ?%| percent)?)?'
+      - '(?:decrease|lower|reduce) (?:the )?volume(?: by (?P<value>\d{1,3})(?: ?%| percent)?)?'
+      - 'quieter'
+    action: { kind: set_volume, target: speakers, args: { mode: down, value: '{value}' } }
+
+  - name: volume_set
+    description: "Volume {value}%"
+    patterns:
+      - '(?:set )?(?:the )?volume (?:to |at )?(?P<value>\d{1,3})(?: ?%| percent)?'
+    action: { kind: set_volume, target: speakers, args: { mode: set, value: '{value}' } }
+
+  - name: mute
+    description: "Muting"
+    patterns: ['mute(?: (?:the )?(?:volume|sound|audio))?']
+    action: { kind: set_volume, target: speakers, args: { mode: mute } }
+
+  - name: unmute
+    description: "Unmuting"
+    patterns: ['unmute(?: (?:the )?(?:volume|sound|audio))?']
+    action: { kind: set_volume, target: speakers, args: { mode: unmute } }
+
+  # ---- brightness ----
+  - name: brightness_up
+    description: "Brightness up"
+    defaults: { value: "10" }
+    patterns:
+      - '(?:turn )?(?:the )?brightness up(?: by (?P<value>\d{1,3})(?: ?%| percent)?)?'
+      - '(?:increase|raise) (?:the )?brightness(?: by (?P<value>\d{1,3})(?: ?%| percent)?)?'
+      - 'brighter'
+    action: { kind: set_brightness, target: display, args: { mode: up, value: '{value}' } }
+
+  - name: brightness_down
+    description: "Brightness down"
+    defaults: { value: "10" }
+    patterns:
+      - '(?:turn )?(?:the )?brightness down(?: by (?P<value>\d{1,3})(?: ?%| percent)?)?'
+      - '(?:decrease|lower|reduce|dim) (?:the )?brightness(?: by (?P<value>\d{1,3})(?: ?%| percent)?)?'
+      - 'dimmer'
+    action: { kind: set_brightness, target: display, args: { mode: down, value: '{value}' } }
+
+  - name: brightness_set
+    description: "Brightness {value}%"
+    patterns:
+      - '(?:set )?(?:the )?brightness (?:to |at )?(?P<value>\d{1,3})(?: ?%| percent)?'
+    action: { kind: set_brightness, target: display, args: { mode: set, value: '{value}' } }
+
+  # ---- files / folders ----
+  - name: open_folder
+    description: "Opening {folder}"
+    patterns:
+      - '(?:open|show|go to) (?:my |the )?(?P<folder>downloads|documents|desktop|pictures|photos|music|videos|home)(?: folder)?'
+    action: { kind: open_folder, target: '{folder}' }
+
+  - name: find_file
+    description: "Looking for {query}"
+    patterns:
+      - '(?:find|locate|where is|where''s) (?:the |my )?(?:file )?(?P<query>.+?)(?: file)?'
+    action: { kind: find_file, target: files, args: { query: '{query}' } }
+
+  # ---- system ----
+  - name: lock
+    description: "Locking the screen"
+    patterns: ['lock(?: (?:the |my )?(?:screen|computer|pc|laptop|system))?']
+    action: { kind: lock_screen, target: session }
+
+  # ---- apps (generic — keep last) ----
+  - name: close_app
+    description: "Closing {app}"
+    patterns: ['(?:close|quit|exit|kill) (?:the )?(?P<app>.+?)(?: app)?']
+    action: { kind: close_app, target: '{app}' }
+
+  - name: open_app
+    description: "Opening {app}"
+    patterns: ['(?:open|launch|start|go to) (?:the )?(?P<app>.+?)(?: app| website| site)?']
+    action: { kind: launch_app, target: '{app}' }

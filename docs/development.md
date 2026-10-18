@@ -16,8 +16,12 @@ In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → 
 |---|---|
 | `uv run jarvis --version` | Print the version |
 | `uv run jarvis run` | Start the agent (a stub until the voice loop is added) |
+| `uv run jarvis repl [-v]` | Type commands in a loop (`-v` shows policy logs) |
+| `uv run jarvis do "open notepad"` | Run one command |
+| `uv run jarvis apps [name] [--refresh]` | List apps / see what a name resolves to / rebuild the index |
 | `uv run jarvis demo-safety` | Run fake actions through the safety layer |
-| `uv run pytest` | Run the tests |
+| `uv run pytest` | Run the unit tests (no side effects) |
+| `uv run pytest -m desktop` | Real-desktop smoke tests (opens Notepad, changes and restores volume) |
 | `uv run ruff check .` / `uv run ruff format .` | Lint / format |
 | `uv run mypy src tests` | Strict type check |
 | `uv add <pkg>` / `uv add --dev <pkg>` | Add a dependency |
@@ -32,14 +36,27 @@ src/jarvis/
   main.py          CLI entry (jarvis …)
   config.py        settings loader
   models.py        Intent, Action, ActionResult, RiskLevel
+  agent.py         Agent.handle(text): router → mapper → ActionRunner → executor
+  paths.py         %LOCALAPPDATA%\JarvisAgent locations
   safety/          policy, confirm, killswitch, redact, demo
-  executors/       base.py (ActionRunner) + concrete executors (Phase 2+)
+  router/          regex_router.py (Tier-1 intents)
+  executors/       base.py (ActionRunner), os_executor.py
+  tiers/instant/   app_index, apps, system, files, mapper
   telemetry/       logging, metrics
-  voice/ router/ planner/ tiers/ apps/ memory/   (filled in later phases)
+  voice/ planner/ tiers/{skills,structured,vision}/ apps/ memory/   (later phases)
 docs/              this documentation
 evals/             eval tasks (Phase 16 runner)
 tests/             pytest suite (conftest.py has shared fixtures)
 ```
+
+## Adding a Tier-1 command
+
+1. Add an intent to `config/intents.yaml`, above the generic `close_app` and `open_app` entries.
+2. If it uses a new action kind, add a handler in `executors/os_executor.py` and list the kind in
+   `config/safety.yaml` (it is YELLOW until you do).
+3. Add the utterance to `tests/test_regex_router.py` and a task to `evals/tasks.yaml`.
+
+App nicknames and websites go in `config/apps/aliases.yaml`.
 
 ## Conventions
 

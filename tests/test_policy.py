@@ -60,6 +60,25 @@ def test_typed_content_does_not_trigger_keywords(policy: SafetyPolicy) -> None:
     assert policy.check(action).decision == Decision.ALLOW
 
 
+@pytest.mark.parametrize(
+    "target",
+    ["Cancel Membership", "Unsubscribe", "Deactivate account", "Confirm", "Delete account"],
+)
+def test_irreversible_labels_need_confirm(policy: SafetyPolicy, target: str) -> None:
+    assert policy.check(Action(kind="click", target=target)).decision == Decision.CONFIRM
+
+
+def test_user_built_url_does_not_trigger_keywords(policy: SafetyPolicy) -> None:
+    # "google how to delete my account" builds a URL containing "delete" — still just a search
+    action = Action(kind="open_url", target="https://www.google.com/search?q=delete+my+account")
+    assert policy.check(action).decision == Decision.ALLOW
+
+
+def test_unknown_kind_still_checks_keywords(policy: SafetyPolicy) -> None:
+    result = policy.check(Action(kind="mystery", target="Enter password"))
+    assert result.decision == Decision.HANDOFF
+
+
 def test_flags_raise_risk(policy: SafetyPolicy) -> None:
     action = Action(kind="type_text", target="Field", flags={"password_field"})
     assert policy.check(action).decision == Decision.HANDOFF

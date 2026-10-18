@@ -1,8 +1,34 @@
 # Eval tasks — one per capability. Runner added in Phase 16.
-# Each entry:
-#   - id: open_notepad
-#     command: "open notepad"
-#     expected_tier: 1
-#     check: "window title contains 'Notepad'"
-#     max_latency_ms: 500
-tasks: []
+#   id, command, expected_intent, expected_tier, check (human-readable for now), max_latency_ms
+
+tasks:
+  - { id: open_notepad, command: "open notepad", expected_intent: open_app, expected_tier: 1,
+      check: "Notepad window appears", max_latency_ms: 500 }
+  - { id: open_alias_app, command: "open vs code", expected_intent: open_app, expected_tier: 1,
+      check: "VS Code window appears", max_latency_ms: 800 }
+  - { id: open_typo_app, command: "open spotfy", expected_intent: open_app, expected_tier: 1,
+      check: "Spotify opens despite the typo", max_latency_ms: 800 }
+  - { id: open_site_alias, command: "open youtube", expected_intent: open_app, expected_tier: 1,
+      check: "youtube.com opens in the default browser", max_latency_ms: 500 }
+  - { id: open_domain, command: "go to github.com", expected_intent: open_app, expected_tier: 1,
+      check: "github.com opens", max_latency_ms: 500 }
+  - { id: close_notepad, command: "close notepad", expected_intent: close_app, expected_tier: 1,
+      check: "Notepad closes (or asks to save)", max_latency_ms: 800 }
+  - { id: youtube_search, command: "play lofi on youtube", expected_intent: youtube_search,
+      expected_tier: 1, check: "YouTube results for 'lofi'", max_latency_ms: 500 }
+  - { id: web_search, command: "google best earbuds under 2000", expected_intent: web_search,
+      expected_tier: 1, check: "Google results page", max_latency_ms: 500 }
+  - { id: volume_set, command: "volume 30", expected_intent: volume_set, expected_tier: 1,
+      check: "system volume = 30%", max_latency_ms: 300 }
+  - { id: volume_up, command: "volume up", expected_intent: volume_up, expected_tier: 1,
+      check: "volume +10", max_latency_ms: 300 }
+  - { id: mute, command: "mute", expected_intent: mute, expected_tier: 1,
+      check: "speakers muted", max_latency_ms: 300 }
+  - { id: brightness_set, command: "brightness 50", expected_intent: brightness_set,
+      expected_tier: 1, check: "built-in display at 50%", max_latency_ms: 800 }
+  - { id: open_downloads, command: "open downloads", expected_intent: open_folder,
+      expected_tier: 1, check: "Explorer opens Downloads", max_latency_ms: 500 }
+  - { id: find_file, command: "find my resume", expected_intent: find_file, expected_tier: 1,
+      check: "Explorer opens with the resume selected", max_latency_ms: 2000 }
+  - { id: lock, command: "lock the screen", expected_intent: lock, expected_tier: 1,
+      check: "Windows lock screen", max_latency_ms: 300 }
