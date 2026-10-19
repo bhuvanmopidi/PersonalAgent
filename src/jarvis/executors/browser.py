@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 AGENT_KINDS = frozenset(
-    {"click", "type_text", "press_key", "select_option", "scroll", "find", "navigate", "go_back",
-     "wait"}
+    {"click", "double_click", "type_text", "press_key", "select_option", "scroll", "find",
+     "navigate", "go_back", "wait"}
 )  # fmt: skip
 BROWSER_KINDS = frozenset(
     {"open_url", "youtube_play", "media_key", "browser_nav", "set_ad_policy", *AGENT_KINDS}
@@ -335,6 +335,15 @@ class BrowserExecutor:
                 await loc.click(timeout=ELEMENT_TIMEOUT_MS)
                 await _settle(page)
                 return ok(f"Clicked {what}")
+            if action.kind == "double_click":
+                if loc is None:
+                    return fail("bad_element", "double click needs an element")
+                blocked = await self._covered(loc, what)
+                if blocked is not None:
+                    return blocked
+                await loc.dblclick(timeout=ELEMENT_TIMEOUT_MS)
+                await _settle(page)
+                return ok(f"Double-clicked {what}")
             if action.kind == "type_text":
                 if loc is None:
                     return fail("bad_element", "type needs an element")

@@ -75,3 +75,48 @@ tasks:
     goal: how many days do I have to return a phone, according to this page?
     start: shop.html
     success: { status: ok, message_contains: "10 days" }
+
+  # ---- Windows apps (Phase 11.2): the same agent through UI Automation ----------------------
+  # the test app (evals/apps/testapp.ps1): plain Windows Forms controls, like any normal app
+  - id: app_form
+    where: desktop
+    goal: in the Jarvis Test App, fill in the name Bhuvan, choose Nepal as the country and save it
+    start: testapp
+    success: { status: ok, window_contains: "Saved: Bhuvan, Nepal" }
+
+  # the song is below the visible part of the list: find / scroll, then play it
+  - id: app_play_from_long_list
+    where: desktop
+    goal: in the Jarvis Test App, play Blinding Lights
+    start: testapp
+    success: { status: ok, window_contains: "Playing Blinding Lights" }
+
+  # a modal dialog over the window, a check box inside it
+  - id: app_dialog
+    where: desktop
+    goal: in the Jarvis Test App, turn on dark mode in the preferences
+    start: testapp
+    success: { status: ok, window_contains: "Dark mode: on" }
+
+  - id: app_delete_declined
+    where: desktop
+    goal: in the Jarvis Test App, delete my account
+    start: testapp
+    answers: [false]
+    success: { status: declined, window_lacks: "Account deleted" }
+
+  # a built-in app the agent opens itself
+  - id: calculator
+    where: desktop
+    goal: open the Calculator app and work out 234 times 47 with it
+    start: ""
+    close_after: calculator
+    success: { status: ok, message_contains: "998" }
+
+  # the app is already open from the previous step and the goal doesn't name one: stay in it
+  # (from the real test: "write down the code… and save it" after "make a new word file")
+  - id: app_stays_in_current_window
+    where: desktop
+    goal: write hello in the name box and save it
+    start: testapp
+    success: { status: ok, window_contains: "Saved: hello, India" }

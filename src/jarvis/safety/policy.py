@@ -73,6 +73,29 @@ class SafetyRules(BaseModel):
     url_rules: UrlRules = UrlRules()
     captcha: CaptchaRules = CaptchaRules()
     payment_required_fields: list[str] = Field(default_factory=list)
+    settings_apps: list[str] = Field(default_factory=list)  # value changes there → confirm
+    risky_keys: RiskLists = RiskLists()  # key combos that act at once (send, delete for good)
+
+
+_KEY_ALIASES = {"control": "ctrl", "escape": "esc", "return": "enter", "del": "delete",
+                "windows": "win", "cmd": "win"}  # fmt: skip
+_MOD_ORDER = ["ctrl", "alt", "shift", "win"]
+
+
+def normalize_keys(combo: str) -> str:
+    """'Shift + Del' → 'shift+delete', 'Enter+Ctrl' → 'ctrl+enter' (modifiers first, in order)."""
+    parts = [_KEY_ALIASES.get(p, p) for p in re.split(r"\s*\+\s*", combo.strip().lower()) if p]
+    mods = sorted((p for p in parts if p in _MOD_ORDER), key=_MOD_ORDER.index)
+    return "+".join(mods + [p for p in parts if p not in _MOD_ORDER])
+
+
+def app_of(page_url: str) -> str:
+    """'app://systemsettings' → 'systemsettings' (desktop actions); '' for web pages."""
+    return (
+        page_url.removeprefix("app://").split("#")[0].lower()
+        if page_url.startswith("app://")
+        else ""
+    )
 
 
 def url_risk(url: str, rules: UrlRules) -> tuple[RiskLevel, str] | None:
@@ -109,6 +132,10 @@ class SafetyPolicy:
         self._flag_risk = {
             flag: level for level, flags in rules.flags.by_level().items() for flag in flags
         }
+        self._key_risk = {
+            normalize_keys(k): level for level, keys in rules.risky_keys.by_level().items()
+            for k in keys
+        }  # fmt: skip
         self._keyword_patterns = [
             (re.compile(rf"(?<!\w){re.escape(kw)}(?!\w)", re.IGNORECASE), kw, level)
             for level, kws in rules.keywords.by_level().items()
@@ -138,6 +165,20 @@ class SafetyPolicy:
             if level > risk:
                 risk = level
                 reasons.append(f"flag '{flag}' ({level.name})")
+
+        # key combos that act at once in many apps (Ctrl+Enter sends, Shift+Delete skips the bin)
+        if action.kind == "press_key" and "key" in action.args:
+            level = self._key_risk.get(normalize_keys(str(action.args["key"])), RiskLevel.GREEN)
+            if level > risk:
+                risk = level
+                reasons.append(f"key {action.args['key']} acts at once ({level.name})")
+
+        # changing a value in Windows settings (a switch, an option) — confirmed, never silent
+        app = app_of(action.page_url)
+        changes_setting = "value_change" in action.flags and app in self.rules.settings_apps
+        if changes_setting and risk < RiskLevel.YELLOW:
+            risk = RiskLevel.YELLOW
+            reasons.append(f"changes a Windows setting in {app} (YELLOW)")
 
         # where it happens: the page it acts on, or the URL it opens
         urls = [("page", action.page_url)]

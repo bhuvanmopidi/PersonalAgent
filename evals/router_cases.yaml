@@ -100,9 +100,21 @@ cases:
   - { tag: task, text: "order boat airdopes from amazon", kind: task, goal_has: [airdopes, amazon] }
   - { tag: task, text: "book an uber to the airport", kind: task, goal_has: [uber, airport] }
 
+  # ---- work inside a Windows app → a desktop task (Phase 11.2) ----
+  - { tag: app, text: "play blinding lights on spotify", kind: task, where: desktop, goal_has: [blinding lights, spotify] }
+  - { tag: app, text: "what's my display resolution", kind: task, where: desktop, goal_has: [resolution] }
+  - { tag: app, text: "use the calculator to work out 234 times 47", kind: task, where: desktop, goal_has: ["234", "47"] }
+  - { tag: app, text: "open file explorer and show me the newest file in downloads", kind: task, where: desktop, goal_has: [downloads] }
+  # carries on in the app opened by the previous command (the real Word test)
+  - { tag: app, context: "make a new word file",
+      context_did: "task(goal=make a new word file, where=desktop) -> I've created a new blank Word document for you.",
+      text: "write down the code for palindrome in python and save it in desktop as jarvis",
+      kind: task, where: desktop, goal_has: [word, palindrome, jarvis] }
+  # a Windows setting: the agent does it, the change is confirmed (user's choice, 2026-10-19)
+  - { tag: app, text: "turn off the wifi", kind: task, where: desktop, goal_has: [wi] }
+
   # ---- not supported yet (not a website task) → say so, don't act ----
   - { tag: unsupported, text: "delete all my downloads", kind: unsupported }
-  - { tag: unsupported, text: "turn off the wifi", kind: unsupported }
 
   # ---- too vague → ask back, don't act ----
   - { tag: vague, text: "open it", kind: clarify }

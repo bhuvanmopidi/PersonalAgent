@@ -45,10 +45,13 @@ class Snapshot(BaseModel):
     covered: int = 0  # on-screen elements hidden behind a popup / overlay
     cover: str = ""  # what covers them: the popup's own text
     cover_share: float = 0.0  # how much of the screen that popup takes (0–1)
+    windows: list[str] = Field(default_factory=list)  # desktop: the other open app windows
+    folders: dict[str, str] = Field(default_factory=dict)  # desktop: where Desktop, Documents … are
 
     def fingerprint(self) -> tuple[str, ...]:
         """What the page shows (address, headings, controls) — to tell progress from a loop."""
-        return (self.url, *self.headings, *(f"{e.name}={e.value}" for e in self.elements))
+        return (self.url, *self.headings, self.text,
+                *(f"{e.name}={e.value}={e.checked}" for e in self.elements))  # fmt: skip
 
     def by_id(self, element_id: int | None) -> Element | None:
         return next((e for e in self.elements if e.id == element_id), None)
@@ -92,6 +95,12 @@ class Snapshot(BaseModel):
             )
         if self.more_below:
             lines.append("(more content below — scroll to see it)")
+        if self.windows:
+            lines.append("Other open windows: " + " | ".join(self.windows))
+        if self.folders:
+            lines.append(
+                "Your folders: " + " · ".join(f"{k} = {v}" for k, v in self.folders.items())
+            )
         return "\n".join(lines)
 
 

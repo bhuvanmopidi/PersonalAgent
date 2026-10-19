@@ -1,0 +1,108 @@
+"""Where the general agent works: a browser tab or a Windows app window. The See→Think→Act→Check
+loop (agent.py) is the same for both; a Surface is how it looks and how it notices change.
+
+  browser — the Jarvis Chrome tab, read from the DOM (observer.py), CAPTCHAs handed over
+  desktop — an app window, read through UI Automation (desktop_observer.py), administrator
+            prompts never touched
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal, Protocol
+
+from jarvis.models import ActionResult
+from jarvis.tiers.structured.observer import Snapshot, dom_size, observe, settle, still_there
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
+
+    from jarvis.executors.browser import BrowserExecutor
+    from jarvis.executors.desktop import DesktopSession
+
+SurfaceName = Literal["browser", "desktop"]
+
+
+class Surface(Protocol):
+    name: SurfaceName
+
+    async def blocked(self) -> ActionResult | None:
+        """Something only the user may handle (a CAPTCHA, an admin prompt): stop with it."""
+        ...
+
+    async def observe(self, max_elements: int, max_text: int) -> Snapshot: ...
+    async def still_there(self, element_id: int) -> bool: ...
+    async def size(self) -> int: ...
+    async def settle(self) -> None: ...
+    def location(self) -> str:
+        """Changes when the agent lands somewhere else (a new page / another window)."""
+        ...
+
+
+class BrowserSurface:
+    name: SurfaceName = "browser"
+
+    def __init__(self, browser: BrowserExecutor) -> None:
+        self.browser = browser
+        self._url = ""
+
+    async def _page(self) -> Page:
+        return await self.browser.agent_tab()
+
+    async def blocked(self) -> ActionResult | None:
+        page = await self._page()
+        return await self.browser.captcha.check(page)
+
+    async def observe(self, max_elements: int, max_text: int) -> Snapshot:
+        page = await self._page()
+        snap = await observe(page, max_elements, max_text)
+        self._url = page.url
+        return snap
+
+    async def still_there(self, element_id: int) -> bool:
+        return await still_there(await self._page(), element_id)
+
+    async def size(self) -> int:
+        page = await self._page()
+        self._url = page.url
+        return await dom_size(page)
+
+    async def settle(self) -> None:
+        await settle(await self._page())
+
+    def location(self) -> str:
+        page = self.browser.agent_page
+        return page.url if page is not None and not page.is_closed() else self._url
+
+
+class DesktopSurface:
+    name: SurfaceName = "desktop"
+
+    def __init__(self, session: DesktopSession) -> None:
+        self.session = session
+
+    async def blocked(self) -> ActionResult | None:
+        if await self.session.needs_admin():
+            return ActionResult(
+                ok=False,
+                error="admin",
+                observation="Windows is asking for administrator permission. I never use admin "
+                "rights — approve it yourself if you want it, then ask me again.",
+            )
+        return None
+
+    async def observe(self, max_elements: int, max_text: int) -> Snapshot:
+        await self.session.settle()  # like a page: look once the window has stopped changing
+        return await self.session.observe(max_elements, max_text)
+
+    async def still_there(self, element_id: int) -> bool:
+        return await self.session.still_there(element_id)
+
+    async def size(self) -> int:
+        return await self.session.size()
+
+    async def settle(self) -> None:
+        await self.session.settle()
+
+    def location(self) -> str:
+        window = self.session.window
+        return f"{self.session.location()}#{window.handle}" if window else "app://none"

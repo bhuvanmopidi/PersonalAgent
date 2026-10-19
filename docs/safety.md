@@ -9,7 +9,10 @@ Code: `src/jarvis/safety/` and `src/jarvis/executors/base.py`. Rules: `config/sa
 | 🟢 GREEN | open app, open URL, search, play, type text | **ALLOW** | Runs immediately |
 | 🟡 YELLOW | send, submit form, delete/move file, place order, **any unknown action** | **CONFIRM** | Reads back the details and runs only on an explicit "yes" |
 | 💳 PAYMENT | pay, or clicking "Proceed to Pay" / "Pay now" | **CONFIRM** or **REFUSE** | All five details (item, quantity, price, address, payment method) must be present, or it is refused without asking |
-| 🔴 RED | OTP, UPI PIN, password, login, CAPTCHA, system settings | **HANDOFF** | The user does the step; the agent's executor is never called |
+| 🔴 RED | OTP, UPI PIN, password, login, CAPTCHA | **HANDOFF** | The user does the step; the agent's executor is never called |
+
+Changing a **Windows setting** is 🟡 YELLOW (confirmed) since Phase 11.2 — the user's choice; it was
+a hand-off before. Administrator (UAC) prompts are never touched: the agent stops.
 
 ## How the risk is computed
 
@@ -128,13 +131,29 @@ Every step the browser agent takes is an ordinary `Action` through `ActionRunner
 - a "no" ends the whole task; page text is treated as untrusted data in the planner's prompt
   (prompt-injection guard — tested with an injected "delete the account" page).
 
+## Windows apps (Phase 11.2)
+
+The desktop agent's steps take the same path (`ActionRunner` → `SafetyPolicy`), with these facts
+added:
+
+| Fact | Where it comes from | Effect |
+|---|---|---|
+| The control's **name** ("Delete account", "Send", "Sign in") | UI Automation | Same keyword rules as on websites |
+| **Password box** | UI Automation `IsPassword` | `password_field` → 🔴 hand-off; its content is never read; typing "where the cursor is" refuses if the cursor is in one |
+| **Changes a value** (a switch, check box, option, drop-down, typed value) | the control's type / toggle state → flag `value_change` | In a settings app (`settings_apps`: `systemsettings`, `mmc`, `regedit`) → 🟡 confirm, read back with the current value: *select "Light" in "Choose your mode" (now "Dark") in Settings?* Looking around Settings is free |
+| **Key combos that act at once** | `risky_keys` in `config/safety.yaml`: Ctrl+Enter (send), Shift+Delete (delete, skipping the Recycle Bin), Ctrl+Shift+Delete, Alt+S | 🟡 confirm, in any app or site |
+| **Administrator prompt** (UAC, `consent.exe`) | checked before every step | the task stops: "I never use admin rights — approve it yourself if you want it" |
+| The planner's **risk hint** (irreversible / payment / credentials) | the model | raise-only, as on websites |
+
+Store apps (Calculator, Settings…) share one Windows host process; the agent resolves the real
+program behind the window (`systemsettings`), so the settings rule can't be dodged by that.
+
 ## Planned layers
 
 Each one can only *raise* risk:
 
 | Layer | Phase |
 |---|---|
-| Per-app risky shortcuts (e.g. Gmail Ctrl+Enter = send) | 11.2 |
 | Shell commands: PowerShell AST, verb semantics, allowlist, obfuscation → refuse | 11b |
 | Learned risk classifier (≥99% recall on PAYMENT/RED) | 14b |
 | Adversarial safety evals (miss rate per layer) | 16 |

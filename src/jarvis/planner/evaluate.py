@@ -55,6 +55,7 @@ class Case(BaseModel):
     intent: str | None = None
     slots: dict[str, str] = Field(default_factory=dict)
     goal_has: list[str] = Field(default_factory=list)  # task: words its goal must contain
+    where: Literal["browser", "desktop"] | None = None  # task: website or Windows app
     context: str | None = None
     context_did: str = "(done)"  # what Jarvis did/said for `context` (e.g. asked a question)
     tag: str = ""
@@ -83,7 +84,8 @@ class Prediction:
     ms: float = 0.0
     usage: Usage = field(default_factory=Usage)
     error: str | None = None
-    goal: str = ""  # kind "task": what the browser agent would be asked to do
+    goal: str = ""  # kind "task": what the agent would be asked to do
+    where: str = ""  # kind "task": browser or desktop
 
 
 def slot_matches(expected: str, got: str) -> bool:
@@ -120,6 +122,7 @@ def score(case: Case, pred: Prediction) -> Score:
     if case.kind == "task":
         goal = pred.goal.lower()
         right = pred.kind == "task" and all(w.lower() in goal for w in case.goal_has)
+        right = right and (case.where is None or pred.where == case.where)
         return Score(correct=right, wrong_action=acted)
     if case.kind != "run_intent":
         return Score(correct=pred.kind == case.kind, wrong_action=acted)
@@ -161,8 +164,9 @@ async def model_predict(router: LLMRouter, case: Case) -> Prediction:
     routed: Routed = await router.route(case.text, context)
     if routed.decision is None:
         return Prediction("none", None, routed.ms, routed.usage, routed.error)
-    return Prediction(routed.decision.kind, routed.intent, routed.ms, routed.usage,
-                      goal=routed.decision.goal or "")  # fmt: skip
+    d = routed.decision
+    return Prediction(d.kind, routed.intent, routed.ms, routed.usage, goal=d.goal or "",
+                      where=d.where or "")  # fmt: skip
 
 
 def openrouter_prices() -> dict[str, tuple[float, float, float, float]]:

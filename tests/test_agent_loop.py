@@ -254,6 +254,13 @@ async def test_stops_after_max_steps(browser: Browser) -> None:
     assert outcome.error in ("max_steps", "stuck") and outcome.steps <= 2
 
 
+async def test_one_planner_hiccup_is_retried(browser: Browser) -> None:
+    planner = ScriptPlanner(LLMUnavailable("OpenRouter timed out"), lambda p: step("done", "Done."))
+    agent, _, _ = await make(browser, "home.html", planner)
+    outcome = await agent.run("x")
+    assert outcome.ok and len(planner.prompts) == 2
+
+
 async def test_no_planner_available(browser: Browser) -> None:
     planner = ScriptPlanner(LLMUnavailable("can't reach OpenRouter (offline?)"))
     agent, _, _ = await make(browser, "home.html", planner)
@@ -452,6 +459,11 @@ def test_final_message_drops_json_debris() -> None:
     assert tidy("Opened the page.") == "Opened the page."
     assert tidy("It costs ₹1,44,900 (about $1,700).") == "It costs ₹1,44,900 (about $1,700)."
     assert tidy('Playing "Blinding Lights".') == 'Playing "Blinding Lights".'
+    assert tidy("Scale is 125 percent.)") == "Scale is 125 percent."
+    assert tidy("Sent with the name Bhuvan.','risk_hint':'none'") == "Sent with the name Bhuvan."
+    assert tidy("Playing Blinding Lights in the Jarvis Test App.</br>") == (
+        "Playing Blinding Lights in the Jarvis Test App."
+    )
 
 
 # ---- find, scrolling limits, harmless popups (from the real amazon.com test) ----------------

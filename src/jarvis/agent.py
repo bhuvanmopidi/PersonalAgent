@@ -19,6 +19,7 @@ from jarvis.config import Settings
 from jarvis.executors.base import ActionRunner
 from jarvis.executors.browser import BROWSER_KINDS, BrowserExecutor
 from jarvis.executors.browser_session import BrowserSession, BrowserUnavailable
+from jarvis.executors.desktop import DesktopExecutor, DesktopSession
 from jarvis.executors.llm_control import LLM_KINDS, LLMControlExecutor
 from jarvis.executors.os_executor import OSExecutor
 from jarvis.executors.router import KindRouter
@@ -44,7 +45,8 @@ from jarvis.tiers.instant.apps import AppLauncher, load_aliases, parse_prefer
 from jarvis.tiers.instant.files import FileTools
 from jarvis.tiers.instant.mapper import to_action
 from jarvis.tiers.instant.system import Brightness, Volume
-from jarvis.tiers.structured.agent import BrowserAgent, default_trace_dir
+from jarvis.tiers.structured.agent import TaskAgent, default_trace_dir
+from jarvis.tiers.structured.surface import BrowserSurface, DesktopSurface, Surface, SurfaceName
 from jarvis.voice.audio import SoundDeviceSink
 from jarvis.voice.speaker import Speaker
 from jarvis.voice.tts import create_engine
@@ -81,7 +83,7 @@ class Agent:
         llm: LLMRouter | None = None,
         mode: Mode = "hybrid",
         route_log: RouteLog | None = None,
-        task_agent: BrowserAgent | None = None,
+        task_agent: TaskAgent | None = None,
     ) -> None:
         self.router, self.runner, self.kill = router, runner, kill
         self.speaker = speaker or Speaker(None, SoundDeviceSink())  # silent by default
@@ -91,7 +93,7 @@ class Agent:
         self.mode: Mode = mode
         self.context = SessionContext()
         self.route_log = route_log
-        self.task_agent = task_agent  # the general browser agent (Phase 11)
+        self.task_agent = task_agent  # the general agent: websites (Phase 11), apps (11.2)
 
     @classmethod
     def create(
@@ -115,16 +117,21 @@ class Agent:
         llm = build_llm_router(settings, rules) if settings.llm.enabled else None
         launcher = AppLauncher(load_aliases())
         system = OSExecutor(launcher, Volume(), Brightness(), FileTools(), url_opener=open_site)
+        desktop = DesktopSession()
         executor = KindRouter(
-            system, [(BROWSER_KINDS, browser), (LLM_KINDS, LLMControlExecutor(llm))]
-        )
+            system, [(BROWSER_KINDS, browser), (LLM_KINDS, LLMControlExecutor(llm))],
+            surfaces={"desktop": DesktopExecutor(desktop, launcher)},
+        )  # fmt: skip
         runner = ActionRunner(policy, executor, spoken, annotate=browser.annotate)
         browser.captcha.escalate = runner.run_action  # CAPTCHA handoffs go through the runner too
         kill = KillSwitch(settings.hotkeys.kill)
         task_agent = None
-        if llm is not None and session is not None:
-            task_agent = BrowserAgent(
-                build_agent_planners(settings, llm.connectivity), browser, runner.run_action,
+        if llm is not None:
+            surfaces: dict[SurfaceName, Surface] = {"desktop": DesktopSurface(desktop)}
+            if session is not None:
+                surfaces["browser"] = BrowserSurface(browser)
+            task_agent = TaskAgent(
+                build_agent_planners(settings, llm.connectivity), surfaces, runner.run_action,
                 settings.agent, trace_dir=default_trace_dir(),
             )  # fmt: skip
         return cls(
@@ -220,7 +227,8 @@ class Agent:
 
         decision = routed.decision if routed else None
         if intent is None and decision is not None and decision.kind == "task":
-            outcome = await self._run_task(text, decision.goal or text, route, route_ms)
+            where: SurfaceName = decision.where or "browser"
+            outcome = await self._run_task(text, decision.goal or text, route, route_ms, where)
         elif intent is None:
             outcome = await self._reply_without_acting(text, routed, route, route_ms)
         else:
@@ -228,11 +236,14 @@ class Agent:
         self._remember(outcome, routed)
         return outcome
 
-    async def _run_task(self, text: str, goal: str, route: str, route_ms: float) -> Outcome:
-        """No single command does it: the general browser agent works it out on the page."""
-        task = Intent(name="task", args={"goal": goal}, source="llm")
-        if self.task_agent is None:
-            reply = "I can't do that yet — the browser agent is switched off."
+    async def _run_task(
+        self, text: str, goal: str, route: str, route_ms: float, where: SurfaceName = "browser"
+    ) -> Outcome:
+        """No single command does it: the general agent works it out on the page or in the app."""
+        task = Intent(name="task", args={"goal": goal, "where": where}, source="llm")
+        if self.task_agent is None or where not in self.task_agent.surfaces:
+            what = "app" if where == "desktop" else "browser"
+            reply = f"I can't do that yet — the {what} agent is switched off."
             result = ActionResult(ok=False, error="no_agent", observation=reply)
         elif self.llm is not None and not await self.llm.connectivity.online():
             reply = "I need the internet for that."
@@ -240,7 +251,7 @@ class Agent:
         else:
             await self.speaker.say("Working on it.")
             try:
-                done = await self.kill.guard(self.task_agent.run(goal))
+                done = await self.kill.guard(self.task_agent.run(goal, where))
                 reply = done.message
                 result = ActionResult(ok=done.ok, error=done.error, observation=reply,
                                       duration_ms=done.ms)  # fmt: skip

@@ -9,6 +9,7 @@ Context for Claude Code. Read this fully before writing code.
 - **Phase report** covers: what was built (files + purpose) · how it works · why those choices · how to run/test · limitations / next-phase hooks · suggested commit message.
 - **Git rule:** Claude never runs `git init/add/commit/push/remote` or creates GitHub repos. Claude only suggests the commands; the user runs them.
 - Claude never switches Claude Code modes on its own; the user controls modes.
+- **Roadmap = generic abilities (user rule, 2026-10-19):** missing capabilities are built as abilities that work in every app/site (desktop agent, file upload, checkout guard, dictation); app names (Spotify, Gmail, Amazon, Word) are only eval tasks.
 - **No hardcoding (user rule):** anything the user asks must be *understood and executed* through the general path (LLM understanding + the See→Think→Act→Check agent). Don't add per-task / per-site flows, selectors or extra regex phrasings to make one case work. Regex rules are only a **speed shortcut** for exact common commands — nothing may depend on them. Hard rules are only for **safety** (policy, payments, OTP/CAPTCHA handoff, kill switch).
 
 ## 1. What we're building
@@ -27,7 +28,7 @@ Goals: (1) strong resume/placement project, (2) ML depth, (3) possible product l
 
 ## 2. Hard constraints
 - **Platform: Windows** only (for now).
-- **No third-party app/web APIs for doing tasks** (no Spotify Web API, no Gmail API, etc.). The agent must operate the real UI like a human. Allowed: local OS automation — UI Automation (pywinauto), keyboard/mouse (pyautogui), Office COM (win32com), URL navigation / URL schemes (e.g. `youtube.com/results?search_query=`, `spotify:search:`), Playwright over CDP to the user's own Chrome.
+- **No third-party app/web APIs for doing tasks** (no Spotify Web API, no Gmail API, etc.). The agent must operate the real UI like a human. Allowed: local OS automation — UI Automation (`uiautomation`), keyboard/mouse (pyautogui), Office COM (win32com), URL navigation / URL schemes (e.g. `youtube.com/results?search_query=`, `spotify:search:`), Playwright over CDP to the user's own Chrome.
 - **Speed is the #1 priority.** Most commands should finish in ~1–3 s.
 - **Local-first**: user data stays on the machine.
 - LLM provider must be **swappable** behind one interface (Claude via Anthropic API for prototyping, local models via Ollama/vLLM later, e.g. Qwen2.5-VL / UI-TARS).
@@ -80,7 +81,8 @@ Log every route + outcome → becomes classifier training data.
 - 🟡 Confirm first (read back full details incl. exact email address/file/price): send messages/emails, submit forms, delete/move files, place orders.
 - 💳 **One-tap checkout:** the agent may click **Pay** only after a spoken + on-screen confirmation of item, quantity, price, delivery address and payment method. It uses only payment methods already saved on the site. It **never stores** card numbers, CVV or UPI PIN. **OTP / UPI PIN / 3-D Secure are always entered by the user.**
 - **Risk is judged per step, at execution time, never per task.** Layers (each can only *raise* risk; final = strictest): action kind → UI label keywords → structural facts (UIA `IsPassword`, `type=password`, CAPTCHA iframes, checkout URLs) → per-app risky shortcuts → AI risk judge → learned classifier. Only an allowlist can yield GREEN; anything unrecognised is confirmed. Errors must cost a confirmation, never data. Contain damage too: no admin, reversible deletes, previews, kill switch.
-- 🔴 Always hand control to user: **OTPs, UPI PINs, passwords, logins, CAPTCHAs / any "verify you are human" check**, system settings changes.
+- 🔴 Always hand control to user: **OTPs, UPI PINs, passwords, logins, CAPTCHAs / any "verify you are human" check**.
+- ⚙️ **Windows settings changes are confirmed** (user's choice, 2026-10-19 — was a hand-off): the agent may look around Settings freely; a step that changes a value (a switch, an option, a typed value) is read back with its current value and done only after "yes". **Administrator prompts are never touched** — the agent stops and leaves it to the user.
 - **Never auto-solve CAPTCHAs.** Detect (iframes from recaptcha / hcaptcha / challenges.cloudflare.com, or vision sees the check) → pause & save state → bring window to front + speak/notify → wait until it disappears → resume. Minimize them by using the user's real logged-in Chrome profile via CDP, never headless, human-paced actions.
 - Global **kill hotkey (Esc)** stops the agent instantly. Mic stays live during execution so "stop" / corrections can interrupt.
 
@@ -110,7 +112,7 @@ User controls: history panel (view/delete), pause memory, forget everything.
 
 ## 8. Tech stack
 - **Voice:** wake word (openWakeWord), Silero VAD, faster-whisper (streaming), Piper TTS. Later: Indian languages (IndicConformer etc.).
-- **Desktop:** pywinauto / UI Automation, pyautogui, win32com, mss (screenshots).
+- **Desktop:** UI Automation via the `uiautomation` package (chosen over pywinauto for speed: ~0.1–0.4 s per look), keyboard via pynput, win32com, mss (screenshots).
 - **Browser:** Playwright over CDP.
 - **Vision fallback:** OmniParser + vision LLM.
 - **Brain:** rules → LLM router (Phase 7: **OpenRouter → Claude Haiku 5.5** (default online — chosen by benchmark: 92% / 6% wrong / 1.7 s; OpenRouter credits, not direct Claude/OpenAI), OpenAI gpt-4o-mini, Claude Haiku 5.5, or a local Ollama model (qwen2.5:3b); **offline always the local model**; online provider user-selectable, default confirmed from `jarvis eval-router`) → later embeddings + classifier (Phase 14). Provider-agnostic interface in `planner/llm.py` using the **official `openai`, `anthropic` and `ollama` SDKs** (chosen over PydanticAI: one structured call, fewer deps). Planner/agent model for later phases: Claude Opus 5.5.
@@ -157,13 +159,15 @@ PersonalAgent/
 | 3 | Voice out | Piper TTS, speak-while-acting |
 | 4 | Voice in | openWakeWord + Silero VAD + streaming faster-whisper → router |
 | 5 | Browser via CDP | Playwright CDP, YouTube flow, CAPTCHA handoff |
-| 6 | Amazon (**after 11** — a task for the general agent) | agent shops; one-tap checkout safety rules |
-| 7 | LLM layer (**built before 6**) | rules → OpenRouter (Claude Haiku 5.5) / OpenAI / Claude / local Ollama model, offline fallback, provider switch by voice, router benchmark (`jarvis eval-router`) |
-| 8 | Gmail (**after 11**, agent task) | compose/attach/read-back/confirm/send via the agent + send confirmation |
-| 9 | Spotify (**after 11.2**, agent task) | desktop agent + `spotify:search:` shortcut |
-| 10 | Word dictation (**after 11.2**) | live typing + dictation commands |
-| 11 | **General browser agent — next** (any website) | DOM observer, batched See→Think→Act→Check with Claude Haiku via OpenRouter; every step through ActionRunner; **AI risk hint** (raise-only); prompt-injection guard; router hands unmatched requests to it |
-| 11.2 | General desktop agent | same loop on Windows apps via UI Automation |
+| 6 | ~~Amazon~~ → now **11.4** (generic checkout guard; Amazon is only an eval task) | — |
+| 7 | LLM layer | rules → OpenRouter (Claude Haiku 5.5) / OpenAI / Claude / local Ollama model, offline fallback, provider switch by voice, router benchmark (`jarvis eval-router`) |
+| 8 | ~~Gmail~~ → now **11.3** (generic file attach/upload; Gmail is only an eval task) | — |
+| 9 | ~~Spotify~~ → now **11.2** (Spotify is just a desktop-agent task; `spotify:search:` = optional tip) | — |
+| 10 | **Live dictation into any text box** (after 11.4) | you talk → words typed live into whatever field has focus (Word, Notepad, Gmail, WhatsApp, Docs…); commands that work everywhere: new line / new paragraph, delete that, undo, select all, save, stop dictation; formatting via the app's standard shortcuts; Word COM only as an optional faster path. Eval: "make me a Word document" |
+| 11 | **General browser agent** (any website) — done | DOM observer, batched See→Think→Act→Check with Claude Haiku via OpenRouter; every step through ActionRunner; **AI risk hint** (raise-only); prompt-injection guard; router hands unmatched requests to it |
+| 11.2 | **General desktop agent** — done | same See→Think→Act→Check loop on any Windows app via UI Automation (the app's controls as text); same safety layer, find, popups, scroll limits. Evals: "play Blinding Lights on Spotify", Settings, File Explorer, Word editing |
+| 11.3 | **Files in and out, anywhere — next** | attach/upload a file on any website (page file input) or app (Windows "Open file" dialog via UIA); find the file by description (existing file search); know where downloads land. Eval: "mail my resume to Arjun" (+ send confirmation) |
+| 11.4 | **Checkout guard, any shop** | before any pay / place-order step: read the order summary from the page (item, qty, price, address, payment method) → speak + show → click only after yes (one-tap checkout rule, §5); OTP / UPI PIN / CVV always the user's. Eval: "order boAt Airdopes 141 from Amazon" |
 | 11b | Shell commands | `run_command` kind: PowerShell AST parsing + alias resolution, verb semantics, read-only allowlist → GREEN, else confirm, obfuscation → refuse, source tracking (untrusted screen content never auto), no admin, `-WhatIf` previews, Recycle Bin deletes |
 | 12 | Skills (Tier 2) | learn, replay, retire |
 | 13 | Storage | SQLCipher + DPAPI, sqlite-vec, history |

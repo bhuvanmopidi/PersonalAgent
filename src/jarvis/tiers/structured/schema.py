@@ -6,7 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Op = Literal["click", "type", "press", "select", "scroll", "find", "navigate", "back", "wait"]
+Op = Literal["click", "double_click", "type", "press", "select", "scroll", "find", "navigate",
+             "back", "wait", "open_app", "switch", "check_file"]  # fmt: skip
 RiskHint = Literal["none", "irreversible", "payment", "credentials"]
 Status = Literal["continue", "done", "ask", "fail"]
 
@@ -19,7 +20,8 @@ class AgentAction(BaseModel):
     op: Op
     element: int | None = Field(default=None, description="[number] of the element, if any")
     text: str | None = Field(
-        default=None, description="text to type, option to select, or words to find"
+        default=None,
+        description="text to type, option to select, words to find, or an app / window name",
     )
     key: str | None = Field(default=None, description="for press: e.g. Enter, Escape, ArrowDown")
     url: str | None = Field(default=None, description="for navigate: a full https:// URL")

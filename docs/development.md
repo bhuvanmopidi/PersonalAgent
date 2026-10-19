@@ -35,10 +35,10 @@ In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → 
 | `uv run jarvis llm status` | Online? Claude key? Ollama running, model pulled? Routing order |
 | `uv run jarvis llm ask "…" [--provider openrouter\|openai\|claude\|local]` | What each model decides (nothing runs) |
 | `uv run jarvis eval-router [--providers rules,openrouter,openai,claude,local] [--local-models a,b] [--per-tag N] [--limit N]` | Router benchmark → `evals/results/router-<date>.md` (cloud runs cost about a cent) |
-| `uv run jarvis eval-agent [--tasks id1,id2]` | General-agent benchmark on local test sites → `evals/results/agent-<date>.md` (~$0.002) |
+| `uv run jarvis eval-agent [--tasks id1,id2]` | General-agent benchmark: local test sites (headless) + Windows app tasks (the test app `evals/apps/testapp.ps1`, Calculator) → `evals/results/agent-<date>.md`. App tasks use the real screen, mouse and keyboard for a few seconds each |
 | `uv run jarvis demo-safety` | Run fake actions through the safety layer |
 | `uv run pytest` | Run the unit tests (no side effects) |
-| `uv run pytest -m desktop` | Real-desktop smoke tests (Notepad, volume, voice pipeline, real Chrome + YouTube) |
+| `uv run pytest -m desktop` | Real-desktop tests (Notepad, volume, voice pipeline, real Chrome + YouTube; the desktop agent on the test app `evals/apps/testapp.ps1`) — they move the mouse and type |
 | `uv run ruff check .` / `uv run ruff format .` | Lint / format |
 | `uv run mypy src tests` | Strict type check |
 | `uv add <pkg>` / `uv add --dev <pkg>` | Add a dependency |

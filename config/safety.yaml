@@ -7,10 +7,11 @@ kinds:
     [launch_app, close_app, open_url, open_folder, find_file, set_volume, set_brightness,
      lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait,
      youtube_play, media_key, browser_nav, set_ad_policy, set_llm_provider, llm_status,
-     press_key, select_option, find, navigate, go_back]
-  yellow: [send, submit_form, delete_file, move_file, place_order]
+     press_key, select_option, find, navigate, go_back, double_click, switch_window, check_file]
+  # change_system_setting: confirmed, not handed over (user's choice, 2026-10-19)
+  yellow: [send, submit_form, delete_file, move_file, place_order, change_system_setting]
   payment: [pay]
-  red: [enter_password, enter_otp, login, solve_captcha, change_system_setting]
+  red: [enter_password, enter_otp, login, solve_captcha]
 
 # Keywords are matched against the target (the UI label being acted on) only for these kinds —
 # plus any unknown kind. Not for e.g. open_url, whose target is a URL built from the user's words.
@@ -30,6 +31,15 @@ flags:
   yellow: [agent_irreversible]
   payment: [agent_payment]
   red: [password_field, otp_field, captcha_detected, agent_credentials]
+
+# Windows settings: a step that CHANGES a value there (flips a switch or box, picks an option,
+# types a value — the agent marks these "value_change") is confirmed first. Looking around and
+# reading are free. Apps by program name. Administrator prompts are never touched (the agent stops).
+settings_apps: [systemsettings, mmc, regedit]
+
+# Key presses that act at once in many apps — confirm (matched on the normalised combo).
+risky_keys:
+  yellow: [ctrl+enter, shift+delete, ctrl+shift+delete, alt+s]
 
 # Page context: where a browser action happens raises its risk (never lowers it).
 # Checked against action.page_url, and against the target for url_kinds (the target IS a URL).

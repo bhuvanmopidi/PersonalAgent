@@ -19,6 +19,8 @@
 | 5 | Browser via CDP (YouTube, tabs, CAPTCHA handoff, page risk) | ✅ Done | [phase-05-browser.md](phases/phase-05-browser.md) |
 | 7 | LLM layer: rules → Claude Haiku via OpenRouter / local model, benchmark | ✅ Done | [phase-07-llm.md](phases/phase-07-llm.md) |
 | 11 | **General browser agent** — any website, no site-specific code | ✅ Done | [phase-11-agent.md](phases/phase-11-agent.md) |
-| 11.2 | General desktop agent (Windows UI Automation) | ⏳ Next | — |
-| 6, 8–10 | Amazon, Gmail, Spotify, Word — as tasks for the general agent | Planned | — |
+| 11.2 | **General desktop agent** — any Windows app via UI Automation; Spotify is just a task | ✅ Done | [phase-11.2-desktop.md](phases/phase-11.2-desktop.md) |
+| 11.3 | Files in and out on any site/app (attach, upload) — completes "mail my resume" | ⏳ Next | — |
+| 11.4 | Checkout guard for any shop (order read-back before Pay) — completes "order from Amazon" | Planned | — |
+| 10 | Live dictation into any text box (Word, Notepad, Gmail, WhatsApp…) | Planned | — |
 | 12–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |

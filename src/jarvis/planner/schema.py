@@ -13,7 +13,8 @@ class Slot(BaseModel):
 
 
 class RouterDecision(BaseModel):
-    """run_intent: do one of the listed commands · task: hand a goal to the general browser agent ·
+    """run_intent: do one of the listed commands · task: hand a goal to the general agent (on a
+    website or in a Windows app) ·
     answer: reply in words (questions) · clarify: ask one short question back ·
     unsupported: can't do that yet (say why)."""
 
@@ -26,6 +27,9 @@ class RouterDecision(BaseModel):
     )
     goal: str | None = Field(
         default=None, description="only for task: the complete goal, with names from recent turns"
+    )
+    where: Literal["browser", "desktop"] | None = Field(
+        default=None, description="only for task: browser (a website) or desktop (a Windows app)"
     )
 
     def slot_dict(self) -> dict[str, str]:

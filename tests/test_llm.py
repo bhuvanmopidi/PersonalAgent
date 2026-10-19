@@ -391,7 +391,7 @@ def test_router_decision_is_a_valid_openai_strict_schema() -> None:
     from openai.lib._pydantic import to_strict_json_schema
 
     schema = to_strict_json_schema(RouterDecision)
-    assert set(schema["required"]) == {"kind", "intent", "slots", "text", "goal"}
+    assert set(schema["required"]) == {"kind", "intent", "slots", "text", "goal", "where"}
     assert schema["additionalProperties"] is False
     assert '"default"' not in json.dumps(schema)  # strict mode rejects defaults
 
@@ -566,18 +566,22 @@ async def test_open_known_app_stays_on_the_rules(catalog: Catalog) -> None:
 
 
 class FakeTaskAgent:
+    surfaces = {"browser": object(), "desktop": object()}
+
     def __init__(self) -> None:
         self.goals: list[str] = []
+        self.where: list[str] = []
 
-    async def run(self, goal: str) -> object:
+    async def run(self, goal: str, where: str = "browser") -> object:
         from jarvis.tiers.structured.agent import AgentOutcome
 
         self.goals.append(goal)
+        self.where.append(where)
         return AgentOutcome(True, "Playing I Survived 100 Days", steps=4, actions=5)
 
 
-def task(goal: str) -> RouterDecision:
-    return RouterDecision(kind="task", goal=goal)
+def task(goal: str, where: str | None = None) -> RouterDecision:
+    return RouterDecision(kind="task", goal=goal, where=where)  # type: ignore[arg-type]
 
 
 async def test_task_goes_to_the_browser_agent(catalog: Catalog) -> None:
@@ -592,9 +596,21 @@ async def test_task_goes_to_the_browser_agent(catalog: Catalog) -> None:
     assert outcome.intent is not None and outcome.intent.name == "task"
     assert outcome.result.ok and outcome.reply == "Playing I Survived 100 Days"
     assert fake.goals == ["play Dream's newest video"]
+    assert fake.where == ["browser"]  # no `where` from the model → a website task
     assert executor.actions == []  # nothing ran outside the agent
     await agent.speaker.wait()
     assert "Working on it." in engine.texts
+
+
+async def test_app_task_goes_to_the_desktop_agent(catalog: Catalog) -> None:
+    decision = task("play Blinding Lights in the Spotify app", where="desktop")
+    router, _ = make_router(catalog, FakeProvider("openrouter", decision), first="openrouter")
+    agent, executor, _ = make_agent(router)
+    fake = FakeTaskAgent()
+    agent.task_agent = fake  # type: ignore[assignment]
+    outcome = await agent.handle("play blinding lights on spotify")
+    assert outcome.intent is not None and outcome.intent.args["where"] == "desktop"
+    assert fake.where == ["desktop"] and executor.actions == []
 
 
 async def test_task_offline_says_so(catalog: Catalog) -> None:

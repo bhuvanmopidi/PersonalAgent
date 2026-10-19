@@ -22,6 +22,10 @@ class Confirmer(Protocol):
         ...
 
 
+# bookkeeping for the executor (which control, which surface) — meaningless when read aloud
+_INTERNAL_ARGS = {"element", "surface"}
+
+
 def build_confirm_prompt(action: Action, check: PolicyResult) -> str:
     if check.risk == RiskLevel.PAYMENT:
         a = action.args
@@ -30,7 +34,11 @@ def build_confirm_prompt(action: Action, check: PolicyResult) -> str:
             f"deliver to {a['address']}, using {a['payment_method']}?"
         )
     summary = action.description or f"{action.kind} {action.target}".strip()
-    details = ", ".join(f"{k}={v}" for k, v in action.args.items())
+    details = ", ".join(
+        f"{k}={v}"
+        for k, v in action.args.items()
+        if k not in _INTERNAL_ARGS and str(v) not in summary  # said once is enough
+    )
     return f"{summary}" + (f" ({details})" if details else "") + "?"
 
 

@@ -248,7 +248,7 @@ intents:
     patterns: ['(?:go |make (?:it|the video) |exit |leave )?full ?screen(?: mode)?']
     action: { kind: media_key, target: fullscreen }
 
-  # "play X" with no app named → YouTube (Spotify arrives in Phase 9). Placed AFTER the media
+  # "play X" with no app named → YouTube ("… on spotify" is a desktop-agent task). AFTER the media
   # intents so "play", "play it again", "play the next video" keep their meaning; "… on spotify"
   # is left unmatched rather than played on YouTube by mistake.
   - name: play_default

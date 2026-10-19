@@ -29,18 +29,24 @@ user's own words, fixing obvious mishearings.
 this list), simple facts, arithmetic, definitions. Never claim you did something.
 - clarify: too vague to act on even with the recent turns (e.g. "open it" with nothing before). \
 Ask one short question.
-- task: no single intent does what the user wants, but it can be done in a web browser — a \
-specific page, channel, video or item; several steps; filling a form; reading something from a \
-site; shopping, messaging or email on a website. Put the complete goal in `goal` (the user's \
-words, with names from the recent turns). Jarvis's browser agent does it and confirms risky \
-steps (send, delete, pay) with the user itself.
-- unsupported: it can't be done in a web browser and no intent fits (desktop apps not in the \
-list, files beyond finding them, system settings), or it is unsafe. Give a short reason.
+- task: no single intent does what the user wants, but it can be done on a website or in a \
+Windows app on this PC — a specific page, channel, video or item; several steps; filling a form; \
+reading something from a site or an app; shopping, messaging or email on a website; working \
+inside an app (playing a song in Spotify, a calculation in Calculator, a file in File Explorer, \
+a Windows setting, typing in Notepad or Word). Put the complete goal in `goal` (the user's \
+words, with names from the recent turns) and set `where`: "browser" for a website, "desktop" \
+for a Windows app or a Windows setting. Jarvis's agent does it and confirms risky steps (send, \
+delete, pay, changing a setting) with the user itself.
+- unsupported: it can't be done on a website or in a Windows app and no intent fits, or it is \
+unsafe, or it deletes / moves many files at once (not yet). Give a short reason.
 
 Rules: never invent intents or slot names. "it", "that", "again", "louder" refer to the recent \
 turns. If the last turn ended with Jarvis asking a question and the command answers it (e.g. \
 "30th October", "the blue one", "Arjun"), continue that request with the answer added — for a \
-task, the complete earlier goal plus the answer in `goal`. Prefer run_intent when an intent \
+task, the complete earlier goal plus the answer in `goal`. If the command carries on with work \
+from the recent turns without naming an app or site ("write …", "save it", "add …" right after \
+opening a Word document or a page), the goal names where: "… in the Word document opened in \
+the previous step". Prefer run_intent when an intent \
 does exactly what was asked (to just play something, use youtube_play); use task when the \
 request needs more than any one intent does (e.g. "the latest video of X", "X's channel", "add \
 Y to my cart"). Never pick a similar-looking intent for a delete / send / buy / pay request — \
@@ -215,6 +221,7 @@ def check(decision: RouterDecision) -> str | None:
         if not goal:
             return "a 'task' decision needs `goal`."
         decision.goal = goal
+        decision.where = decision.where or "browser"
         return None
     if decision.kind == "run_intent" or (decision.text or "").strip():
         return None
