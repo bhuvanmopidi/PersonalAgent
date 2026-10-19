@@ -29,13 +29,22 @@ user's own words, fixing obvious mishearings.
 this list), simple facts, arithmetic, definitions. Never claim you did something.
 - clarify: too vague to act on even with the recent turns (e.g. "open it" with nothing before). \
 Ask one short question.
-- unsupported: the user wants something not in the list (e.g. sending messages or email, \
-shopping, controlling the Spotify app, editing documents, files outside the listed ones). Give a \
-short reason. If the request is to delete, send, buy, book, pay, turn off or change settings, \
-it is unsupported even when a similar-looking intent exists (never "open" something instead).
+- task: no single intent does what the user wants, but it can be done in a web browser — a \
+specific page, channel, video or item; several steps; filling a form; reading something from a \
+site; shopping, messaging or email on a website. Put the complete goal in `goal` (the user's \
+words, with names from the recent turns). Jarvis's browser agent does it and confirms risky \
+steps (send, delete, pay) with the user itself.
+- unsupported: it can't be done in a web browser and no intent fits (desktop apps not in the \
+list, files beyond finding them, system settings), or it is unsafe. Give a short reason.
 
 Rules: never invent intents or slot names. "it", "that", "again", "louder" refer to the recent \
-turns. To play a video or music, use youtube_play. Prefer run_intent whenever an intent fits."""
+turns. If the last turn ended with Jarvis asking a question and the command answers it (e.g. \
+"30th October", "the blue one", "Arjun"), continue that request with the answer added — for a \
+task, the complete earlier goal plus the answer in `goal`. Prefer run_intent when an intent \
+does exactly what was asked (to just play something, use youtube_play); use task when the \
+request needs more than any one intent does (e.g. "the latest video of X", "X's channel", "add \
+Y to my cart"). Never pick a similar-looking intent for a delete / send / buy / pay request — \
+use task (or unsupported if it's not on a website)."""
 
 
 @dataclass(frozen=True)
@@ -199,8 +208,14 @@ DEFAULT_TEXT = {
 
 
 def check(decision: RouterDecision) -> str | None:
-    """Problems with a non-intent decision. An answer needs words; a question back or a "can't"
-    without words gets a standard sentence instead of being thrown away."""
+    """Problems with a non-intent decision. An answer needs words; a task needs a goal; a question
+    back or a "can't" without words gets a standard sentence instead of being thrown away."""
+    if decision.kind == "task":
+        goal = (decision.goal or decision.text or "").strip()
+        if not goal:
+            return "a 'task' decision needs `goal`."
+        decision.goal = goal
+        return None
     if decision.kind == "run_intent" or (decision.text or "").strip():
         return None
     if decision.kind in DEFAULT_TEXT:

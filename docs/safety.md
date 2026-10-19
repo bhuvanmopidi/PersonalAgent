@@ -108,9 +108,25 @@ After every page load, `CaptchaGate` checks for challenge iframes (`captcha.ifra
 reCAPTCHA, hCaptcha, Cloudflare, Arkose) and phrases (`captcha.phrases`: "verify you are human",
 "unusual traffic from your computer", …). If found, the window comes to the front and a
 `solve_captcha` action with flag `captcha_detected` goes through `ActionRunner` → RED → handoff.
+Only a challenge frame you can **see** counts (at least 20×20 px, not hidden): many sites preload
+Google's invisible reCAPTCHA helper (0×0, `display:none`) on every page — on yatra.com it stopped a
+finished flight search with a false "human check". A real challenge is always visible (you have
+to click it), and the phrase check and the RED label keywords are unchanged.
 The task resumes when you say "done", or as soon as the challenge disappears. **It is never solved
 by the agent.** In typed mode it waits for Enter (a terminal prompt can't be abandoned; see
 `can_cancel()`).
+
+## The general agent's steps (Phase 11)
+
+Every step the browser agent takes is an ordinary `Action` through `ActionRunner`:
+- the target is the clicked/typed element's **visible label** → the keyword rules apply on any site;
+- `page_url` → the checkout/payment URL rules; `navigate` targets are URL-checked too;
+- password / one-time-code fields (from the page structure) → `password_field` / `otp_field` → handoff;
+- **AI risk hint (raise-only):** the planner tags steps `irreversible` / `payment` / `credentials` →
+  flags `agent_irreversible` (confirm), `agent_payment` (payment rules), `agent_credentials` (handoff);
+- `press_key` is judged by the focused element's label (Enter on a "Send" button asks first);
+- a "no" ends the whole task; page text is treated as untrusted data in the planner's prompt
+  (prompt-injection guard — tested with an injected "delete the account" page).
 
 ## Planned layers
 
@@ -118,8 +134,7 @@ Each one can only *raise* risk:
 
 | Layer | Phase |
 |---|---|
-| Per-app risky shortcuts (e.g. Gmail Ctrl+Enter = send), focused-element check | 11 |
-| AI risk judge | 11 |
+| Per-app risky shortcuts (e.g. Gmail Ctrl+Enter = send) | 11.2 |
 | Shell commands: PowerShell AST, verb semantics, allowlist, obfuscation → refuse | 11b |
 | Learned risk classifier (≥99% recall on PAYMENT/RED) | 14b |
 | Adversarial safety evals (miss rate per layer) | 16 |

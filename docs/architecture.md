@@ -126,6 +126,22 @@ The LLM's menu is generated from `intents.yaml`, so it can only choose things Ja
 safety layer is unchanged. Every decision is logged (redacted) for the Phase 14 classifier. Details
 and the benchmark: [phases/phase-07-llm.md](phases/phase-07-llm.md).
 
+## The general browser agent (built in Phase 11)
+
+```
+"open me the latest video of dream" → router: task → BrowserAgent (any website, no per-site code)
+  SEE   observer: wait for the page to settle → numbered elements (incl. custom controls; what a
+        popup covers is hidden and reported) + text
+  THINK planner (Haiku via OpenRouter) → ≤5 actions + status
+  ACT   each action → ActionRunner → SafetyPolicy (label keywords, URL rules, field flags,
+        planner risk hint — raise-only) → BrowserExecutor (click / type / press / select /
+        scroll / find (Ctrl+F) / navigate / back / wait)
+  CHECK page changed mid-batch → look again · done / ask / fail · loop = same actions on an
+        unchanged page · budgets: 20 rounds, 120 s · Esc / "stop" end it
+```
+
+Details: [phases/phase-11-agent.md](phases/phase-11-agent.md).
+
 ## Cross-cutting pieces
 
 | Piece | File | Purpose |
@@ -145,4 +161,5 @@ and the benchmark: [phases/phase-07-llm.md](phases/phase-07-llm.md).
 | Voice input: wake word, push-to-talk, VAD, Whisper (GPU), voice confirmations, "stop" | ✅ Phase 4 |
 | Browser: Jarvis Chrome over CDP, YouTube play/ads, media + tab control, CAPTCHA handoff, page-aware risk | ✅ Phase 5 |
 | LLM layer: rules → OpenRouter (Claude Haiku 5.5) / OpenAI / Claude / local model (Ollama), offline fallback, router benchmark | ✅ Phase 7 |
-| Amazon/Gmail flows, desktop app flows, AI agents, skills, memory | Planned |
+| General browser agent: any website, See→Think→Act→Check, every step safety-checked, `jarvis eval-agent` | ✅ Phase 11 |
+| Desktop agent (11.2), Amazon/Gmail/Spotify/Word as agent tasks, skills, memory | Planned |

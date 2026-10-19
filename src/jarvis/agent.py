@@ -44,6 +44,7 @@ from jarvis.tiers.instant.apps import AppLauncher, load_aliases, parse_prefer
 from jarvis.tiers.instant.files import FileTools
 from jarvis.tiers.instant.mapper import to_action
 from jarvis.tiers.instant.system import Brightness, Volume
+from jarvis.tiers.structured.agent import BrowserAgent, default_trace_dir
 from jarvis.voice.audio import SoundDeviceSink
 from jarvis.voice.speaker import Speaker
 from jarvis.voice.tts import create_engine
@@ -80,6 +81,7 @@ class Agent:
         llm: LLMRouter | None = None,
         mode: Mode = "hybrid",
         route_log: RouteLog | None = None,
+        task_agent: BrowserAgent | None = None,
     ) -> None:
         self.router, self.runner, self.kill = router, runner, kill
         self.speaker = speaker or Speaker(None, SoundDeviceSink())  # silent by default
@@ -89,6 +91,7 @@ class Agent:
         self.mode: Mode = mode
         self.context = SessionContext()
         self.route_log = route_log
+        self.task_agent = task_agent  # the general browser agent (Phase 11)
 
     @classmethod
     def create(
@@ -118,9 +121,15 @@ class Agent:
         runner = ActionRunner(policy, executor, spoken, annotate=browser.annotate)
         browser.captcha.escalate = runner.run_action  # CAPTCHA handoffs go through the runner too
         kill = KillSwitch(settings.hotkeys.kill)
+        task_agent = None
+        if llm is not None and session is not None:
+            task_agent = BrowserAgent(
+                build_agent_planners(settings, llm.connectivity), browser, runner.run_action,
+                settings.agent, trace_dir=default_trace_dir(),
+            )  # fmt: skip
         return cls(
             rules, runner, kill, speaker, launcher, session,
-            llm=llm, mode=settings.router.mode, route_log=RouteLog(),
+            llm=llm, mode=settings.router.mode, route_log=RouteLog(), task_agent=task_agent,
         )  # fmt: skip
 
     async def prewarm(self, launch_browser: bool = False) -> None:
@@ -209,12 +218,39 @@ class Agent:
         intent, routed, route = await self.understand(text)
         route_ms = (time.perf_counter() - start) * 1000
 
-        if intent is None:
+        decision = routed.decision if routed else None
+        if intent is None and decision is not None and decision.kind == "task":
+            outcome = await self._run_task(text, decision.goal or text, route, route_ms)
+        elif intent is None:
             outcome = await self._reply_without_acting(text, routed, route, route_ms)
         else:
             outcome = await self._act(text, intent, route, route_ms)
         self._remember(outcome, routed)
         return outcome
+
+    async def _run_task(self, text: str, goal: str, route: str, route_ms: float) -> Outcome:
+        """No single command does it: the general browser agent works it out on the page."""
+        task = Intent(name="task", args={"goal": goal}, source="llm")
+        if self.task_agent is None:
+            reply = "I can't do that yet — the browser agent is switched off."
+            result = ActionResult(ok=False, error="no_agent", observation=reply)
+        elif self.llm is not None and not await self.llm.connectivity.online():
+            reply = "I need the internet for that."
+            result = ActionResult(ok=False, error="offline", observation=reply)
+        else:
+            await self.speaker.say("Working on it.")
+            try:
+                done = await self.kill.guard(self.task_agent.run(goal))
+                reply = done.message
+                result = ActionResult(ok=done.ok, error=done.error, observation=reply,
+                                      duration_ms=done.ms)  # fmt: skip
+            except Killed as exc:
+                self.speaker.stop()
+                reply = str(exc)
+                result = ActionResult(ok=False, error="killed", observation=reply)
+        if result.error not in _SILENT_ERRORS:
+            await self.speaker.say(reply)
+        return Outcome(text, task, None, result, route_ms, route=route, reply=reply)
 
     async def _reply_without_acting(
         self, text: str, routed: Routed | None, route: str, route_ms: float
@@ -274,6 +310,18 @@ class Agent:
             attempts=routed.attempts if routed else None,
             tokens=vars(usage) if usage else None,
         )
+
+
+def build_agent_planners(settings: Settings, connectivity: Connectivity) -> list[LLMProvider]:
+    """Who plans the general agent's steps: the agent model via OpenRouter first, then the other
+    cloud providers if they have keys. The local 3B model is too weak for multi-step pages."""
+    s = settings.llm
+    return [
+        OpenRouterProvider(s, on_offline=connectivity.mark_offline, model=s.agent_model,
+                           timeout_s=s.agent_timeout_s),
+        OpenAIProvider(s, on_offline=connectivity.mark_offline, timeout_s=s.agent_timeout_s),
+        ClaudeProvider(s, on_offline=connectivity.mark_offline),
+    ]  # fmt: skip
 
 
 def build_llm_router(settings: Settings, rules: RegexRouter) -> LLMRouter:

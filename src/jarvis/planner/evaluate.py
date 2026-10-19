@@ -51,10 +51,12 @@ PRICES: dict[str, tuple[float, float, float, float]] = {
 
 class Case(BaseModel):
     text: str
-    kind: Literal["run_intent", "answer", "clarify", "unsupported"] = "run_intent"
+    kind: Literal["run_intent", "task", "answer", "clarify", "unsupported"] = "run_intent"
     intent: str | None = None
     slots: dict[str, str] = Field(default_factory=dict)
+    goal_has: list[str] = Field(default_factory=list)  # task: words its goal must contain
     context: str | None = None
+    context_did: str = "(done)"  # what Jarvis did/said for `context` (e.g. asked a question)
     tag: str = ""
 
 
@@ -81,6 +83,7 @@ class Prediction:
     ms: float = 0.0
     usage: Usage = field(default_factory=Usage)
     error: str | None = None
+    goal: str = ""  # kind "task": what the browser agent would be asked to do
 
 
 def slot_matches(expected: str, got: str) -> bool:
@@ -114,6 +117,10 @@ SAME_AS = {"play_default": "youtube_play"}
 
 def score(case: Case, pred: Prediction) -> Score:
     acted = pred.kind == "run_intent" and pred.intent is not None
+    if case.kind == "task":
+        goal = pred.goal.lower()
+        right = pred.kind == "task" and all(w.lower() in goal for w in case.goal_has)
+        return Score(correct=right, wrong_action=acted)
     if case.kind != "run_intent":
         return Score(correct=pred.kind == case.kind, wrong_action=acted)
     if not acted:
@@ -126,19 +133,36 @@ def score(case: Case, pred: Prediction) -> Score:
     return Score(correct=right, wrong_action=not right)
 
 
-def rules_predict(rules: RegexRouter, case: Case) -> Prediction:
+def rules_predict(
+    rules: RegexRouter, case: Case, resolves: Callable[[str, str], bool] | None = None
+) -> Prediction:
+    """What the rules do — like Jarvis: an "open X" whose X is no app or site is left to the LLM."""
     start = time.perf_counter()
     intent = rules.route(case.text)
+    is_open = intent is not None and intent.name == "open_app" and resolves is not None
+    if is_open and intent is not None and resolves is not None:
+        app, prefer = str(intent.args.get("app", "")), str(intent.args.get("prefer", ""))
+        if not resolves(app, prefer):
+            intent = None
     ms = (time.perf_counter() - start) * 1000
     return Prediction("run_intent" if intent else "none", intent, ms)
 
 
+def app_resolver() -> Callable[[str, str], bool]:
+    """This PC's apps and sites (the same AppLauncher Jarvis uses)."""
+    from jarvis.tiers.instant.apps import AppLauncher, load_aliases, parse_prefer
+
+    launcher = AppLauncher(load_aliases())
+    return lambda app, prefer: launcher.resolve(app, parse_prefer(prefer)) is not None
+
+
 async def model_predict(router: LLMRouter, case: Case) -> Prediction:
-    context = f'- user: "{case.context}" -> (done)' if case.context else "(none)"
+    context = f'- user: "{case.context}" -> {case.context_did}' if case.context else "(none)"
     routed: Routed = await router.route(case.text, context)
     if routed.decision is None:
         return Prediction("none", None, routed.ms, routed.usage, routed.error)
-    return Prediction(routed.decision.kind, routed.intent, routed.ms, routed.usage)
+    return Prediction(routed.decision.kind, routed.intent, routed.ms, routed.usage,
+                      goal=routed.decision.goal or "")  # fmt: skip
 
 
 def openrouter_prices() -> dict[str, tuple[float, float, float, float]]:
@@ -209,7 +233,8 @@ async def run_eval(
 ) -> list[TargetResult]:
     rules = RegexRouter.from_yaml()
     catalog = Catalog(rules.specs.values())
-    rule_preds = [rules_predict(rules, c) for c in cases]
+    resolves = app_resolver()
+    rule_preds = [rules_predict(rules, c, resolves) for c in cases]
     results = []
     for target in targets:
         result = TargetResult(target)

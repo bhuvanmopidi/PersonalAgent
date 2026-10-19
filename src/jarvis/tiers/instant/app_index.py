@@ -21,6 +21,7 @@ from jarvis.telemetry.logging import get_logger
 log = get_logger(__name__)
 
 FUZZY_CUTOFF = 85
+CONTAINED_CUTOFF = 90  # a short form must sit (almost) whole inside the name
 _SKIP_WORDS = ("uninstall", "readme", "release notes", "documentation")
 
 
@@ -55,16 +56,20 @@ def best_match(
     prefixed = [n for n in names if n.startswith(q)]
     if prefixed:
         return min(prefixed, key=len), "prefix"
-    match = process.extractOne(q, names, scorer=scorer, score_cutoff=FUZZY_CUTOFF)
-    if not match:
-        return None
-    name = match[0]
-    # Fuzzy is for typos and short partial names ("spotfy", "chrome" → google chrome), not for
-    # sentences that merely contain a name ("mr beast channel in youtube" is not YouTube).
-    similar = fuzz.ratio(q, name) >= FUZZY_CUTOFF
-    if not similar and len(q.split()) > len(name.split()) + 1:
-        return None
-    return name, "fuzzy"
+    for name, _, _ in process.extract(q, names, scorer=scorer, score_cutoff=FUZZY_CUTOFF, limit=5):
+        if looks_like(q, name):
+            return name, "fuzzy"
+    return None
+
+
+def looks_like(query: str, name: str) -> bool:
+    """A fuzzy match is only for typos ("spotfy" → spotify) or short forms that are almost entirely
+    inside the name ("chrome" → google chrome) — never for a phrase that merely shares a word with
+    it ("latest mr beast video" is not "What is new in the latest version", "mr beast channel in
+    youtube" is not YouTube)."""
+    if fuzz.ratio(query, name) >= FUZZY_CUTOFF:
+        return True
+    return len(query) <= len(name) and fuzz.partial_ratio(query, name) >= CONTAINED_CUTOFF
 
 
 _ENTRIES = TypeAdapter(list[AppEntry])

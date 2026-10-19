@@ -345,3 +345,24 @@ def test_closed_errors_are_recognised() -> None:
         Exception("Page.evaluate: Target page, context or browser has been closed")
     )
     assert not is_closed_error(Exception("net::ERR_NAME_NOT_RESOLVED"))
+
+
+async def test_invisible_captcha_helper_is_not_a_human_check(session: HeadlessSession) -> None:
+    confirmer = WaitingConfirmer()
+    runner, *_ = make(session, confirmer=confirmer)
+    result = await runner.run_action(Action(kind="open_url", target=url("invisible-captcha.html")))
+    assert result.ok, result.observation
+    assert confirmer.prompts == []  # nothing to hand over: the user sees no check
+
+
+async def test_page_commands_scroll_the_current_tab(session: HeadlessSession) -> None:
+    runner, *_ = make(session)
+    page = await session.new_page()
+    await page.goto(url("long.html"))
+    scroll_y = "() => window.scrollY"
+    down = await runner.run_action(Action(kind="browser_nav", target="scroll_down"))
+    assert down.ok and down.observation == "Scrolled down" and await page.evaluate(scroll_y) > 0
+    await runner.run_action(Action(kind="browser_nav", target="scroll_bottom"))
+    assert await page.locator("#end").is_visible()
+    await runner.run_action(Action(kind="browser_nav", target="scroll_top"))
+    assert await page.evaluate(scroll_y) == 0

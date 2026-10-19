@@ -53,7 +53,9 @@ class FakeProvider:
         self.calls: list[str] = []
         self.delay = delay
 
-    async def decide(self, system: str, user: str) -> LLMReply:
+    async def decide(
+        self, system: str, user: str, schema: object = None, max_tokens: int = 512
+    ) -> LLMReply:
         self.calls.append(user)
         if self.delay:
             await asyncio.sleep(self.delay)
@@ -389,7 +391,7 @@ def test_router_decision_is_a_valid_openai_strict_schema() -> None:
     from openai.lib._pydantic import to_strict_json_schema
 
     schema = to_strict_json_schema(RouterDecision)
-    assert set(schema["required"]) == {"kind", "intent", "slots", "text"}
+    assert set(schema["required"]) == {"kind", "intent", "slots", "text", "goal"}
     assert schema["additionalProperties"] is False
     assert '"default"' not in json.dumps(schema)  # strict mode rejects defaults
 
@@ -558,3 +560,55 @@ async def test_open_known_app_stays_on_the_rules(catalog: Catalog) -> None:
     router, _ = make_router(catalog, FakeProvider("openrouter"), first="openrouter")
     agent, _, _ = make_agent(router)  # no launcher wired → rules are trusted
     assert (await agent.handle("open spotify")).route == "rules"
+
+
+# ---- Phase 11: "task" → the general browser agent -----------------------------------------
+
+
+class FakeTaskAgent:
+    def __init__(self) -> None:
+        self.goals: list[str] = []
+
+    async def run(self, goal: str) -> object:
+        from jarvis.tiers.structured.agent import AgentOutcome
+
+        self.goals.append(goal)
+        return AgentOutcome(True, "Playing I Survived 100 Days", steps=4, actions=5)
+
+
+def task(goal: str) -> RouterDecision:
+    return RouterDecision(kind="task", goal=goal)
+
+
+async def test_task_goes_to_the_browser_agent(catalog: Catalog) -> None:
+    router, _ = make_router(
+        catalog, FakeProvider("openrouter", task("play Dream's newest video")), first="openrouter"
+    )
+    agent, executor, engine = make_agent(router)
+    agent.launcher = NoAppLauncher()  # type: ignore[assignment]  # "latest video…" is no app
+    fake = FakeTaskAgent()
+    agent.task_agent = fake  # type: ignore[assignment]
+    outcome = await agent.handle("open me the latest video of dream on youtube")
+    assert outcome.intent is not None and outcome.intent.name == "task"
+    assert outcome.result.ok and outcome.reply == "Playing I Survived 100 Days"
+    assert fake.goals == ["play Dream's newest video"]
+    assert executor.actions == []  # nothing ran outside the agent
+    await agent.speaker.wait()
+    assert "Working on it." in engine.texts
+
+
+async def test_task_offline_says_so(catalog: Catalog) -> None:
+    router, _ = make_router(catalog, FakeProvider("local", task("x")), online=False)
+    agent, _, _ = make_agent(router)
+    fake = FakeTaskAgent()
+    agent.task_agent = fake  # type: ignore[assignment]
+    outcome = await agent.handle("do something on a website")
+    assert outcome.result.error == "offline" and fake.goals == []
+
+
+def test_task_needs_a_goal() -> None:
+    from jarvis.planner.catalog import check
+
+    decision = RouterDecision(kind="task", text="book a cab")
+    assert check(decision) is None and decision.goal == "book a cab"  # falls back to text
+    assert check(RouterDecision(kind="task")) is not None

@@ -6,7 +6,8 @@ kinds:
   green:
     [launch_app, close_app, open_url, open_folder, find_file, set_volume, set_brightness,
      lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait,
-     youtube_play, media_key, browser_nav, set_ad_policy, set_llm_provider, llm_status]
+     youtube_play, media_key, browser_nav, set_ad_policy, set_llm_provider, llm_status,
+     press_key, select_option, find, navigate, go_back]
   yellow: [send, submit_form, delete_file, move_file, place_order]
   payment: [pay]
   red: [enter_password, enter_otp, login, solve_captcha, change_system_setting]
@@ -25,11 +26,14 @@ keywords:
   red: [password, otp, one-time password, upi pin, cvv, sign in, log in, verify you are human, captcha]
 
 flags:
-  red: [password_field, otp_field, captcha_detected]
+  # agent_*: the agent planner's own risk hint for a step (an AI risk judge) — can only raise risk
+  yellow: [agent_irreversible]
+  payment: [agent_payment]
+  red: [password_field, otp_field, captcha_detected, agent_credentials]
 
 # Page context: where a browser action happens raises its risk (never lowers it).
 # Checked against action.page_url, and against the target for url_kinds (the target IS a URL).
-url_kinds: [open_url]
+url_kinds: [open_url, navigate]
 url_rules:
   payment:
     path_keywords: [/checkout, /payment, /payments, /pay/, /buy/, /gp/buy, /placeorder, /order/confirm]

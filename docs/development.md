@@ -35,6 +35,7 @@ In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → 
 | `uv run jarvis llm status` | Online? Claude key? Ollama running, model pulled? Routing order |
 | `uv run jarvis llm ask "…" [--provider openrouter\|openai\|claude\|local]` | What each model decides (nothing runs) |
 | `uv run jarvis eval-router [--providers rules,openrouter,openai,claude,local] [--local-models a,b] [--per-tag N] [--limit N]` | Router benchmark → `evals/results/router-<date>.md` (cloud runs cost about a cent) |
+| `uv run jarvis eval-agent [--tasks id1,id2]` | General-agent benchmark on local test sites → `evals/results/agent-<date>.md` (~$0.002) |
 | `uv run jarvis demo-safety` | Run fake actions through the safety layer |
 | `uv run pytest` | Run the unit tests (no side effects) |
 | `uv run pytest -m desktop` | Real-desktop smoke tests (Notepad, volume, voice pipeline, real Chrome + YouTube) |
@@ -56,6 +57,7 @@ src/jarvis/
   paths.py         %LOCALAPPDATA%\JarvisAgent locations
   safety/          policy, confirm, killswitch, redact, captcha, demo
   router/          regex_router.py (Tier-1 intents), context.py, log.py (routes.jsonl)
+  tiers/structured/ the general browser agent: observer, schema, prompts, agent loop, evaluate
   planner/         schema, catalog (from intents.yaml), llm (OpenAI, Claude, Ollama), router, connectivity,
                    evaluate (benchmark)
   executors/       base.py (ActionRunner), router.py (KindRouter), os_executor.py, llm_control.py,

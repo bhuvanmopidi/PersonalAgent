@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><title>PhoneBazaar - Mobile phones</title>
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  header { padding: 12px 24px; background: #222; color: #fff; }
+  .wrap { display: flex; gap: 24px; padding: 16px 24px; }
+  aside { width: 220px; }
+  aside h4 { margin: 18px 0 6px; }
+  aside label { display: block; padding: 3px 0; }
+  main { flex: 1; }
+  .item { border-bottom: 1px solid #ddd; padding: 28px 8px; }
+  .item h3 { margin: 0 0 6px; }
+  /* a harmless notice in the corner, like "we're showing items that ship to India":
+     Escape does nothing, only its own Dismiss button closes it */
+  #toast { position: fixed; left: 16px; top: 130px; width: 230px; background: #fffbe6;
+           border: 1px solid #c9a400; padding: 10px; z-index: 5; }
+  footer { padding: 24px; color: #444; }
+</style></head>
+<body>
+  <header><b>PhoneBazaar</b> — Mobile phones</header>
+  <div id="toast">We're showing you items that ship to India.
+    <button id="dismiss">Dismiss</button></div>
+  <div class="wrap">
+    <aside>
+      <!-- filters: brand, RAM, storage — but NO price filter (like amazon.com seen from India) -->
+      <h4>Brand</h4>
+      <label><input type="checkbox"> Samsung</label><label><input type="checkbox"> Apple</label>
+      <label><input type="checkbox"> Google</label><label><input type="checkbox"> Motorola</label>
+      <label><input type="checkbox"> OnePlus</label><label><input type="checkbox"> Xiaomi</label>
+      <h4>RAM</h4>
+      <label><input type="checkbox"> 4 GB</label><label><input type="checkbox"> 8 GB</label>
+      <label><input type="checkbox"> 12 GB &amp; above</label>
+      <h4>Storage</h4>
+      <label><input type="checkbox"> 128 GB</label><label><input type="checkbox"> 256 GB</label>
+      <label><input type="checkbox"> 512 GB &amp; above</label>
+    </aside>
+    <main>
+      <label>Sort by:
+        <select id="sort">
+          <option>Featured</option><option>Price: Low to High</option>
+          <option>Price: High to Low</option>
+        </select></label>
+      <div id="list"></div>
+    </main>
+  </div>
+  <footer id="returns"><h4>Returns policy</h4>
+    You can return any phone within 10 days of delivery if it is unused and in its box.</footer>
+<script>
+  const phones = [
+    ["Moto G Play", 14245], ["Redmi Note 14", 17999], ["Galaxy A17 5G", 23267],
+    ["Moto G Stylus 2025", 28491], ["OnePlus Nord 5", 31999], ["Pixel 9a", 49999],
+    ["Galaxy S24 FE", 54999], ["iPhone 15", 61999], ["OnePlus 13", 69999],
+    ["Xiaomi 15", 64999], ["Galaxy Z Flip 6", 79999], ["Moto Edge 60 Pro", 33999],
+    ["Redmi 14C", 9999], ["Galaxy M36", 18999], ["Pixel 9 Pro XL", 124999],
+    ["Moto G85", 17499], ["iPhone 16 Pro Max", 144900], ["OnePlus Nord CE 5", 24999],
+    ["Galaxy S25 Ultra", 129999], ["Redmi Note 14 Pro", 26999],
+  ];
+  const rupees = n => "₹" + n.toLocaleString("en-IN");
+  function show(list) {
+    document.getElementById("list").innerHTML = list.map(([name, price]) =>
+      `<div class="item"><h3><a href="#${encodeURIComponent(name)}">${name}</a></h3>` +
+      `<span class="price">${rupees(price)}</span> <button>Add to cart</button></div>`).join("");
+  }
+  show(phones);
+  document.getElementById("sort").addEventListener("change", (e) => {
+    const s = e.target.value, list = [...phones];
+    if (s === "Price: Low to High") list.sort((a, b) => a[1] - b[1]);
+    if (s === "Price: High to Low") list.sort((a, b) => b[1] - a[1]);
+    show(list);
+  });
+  document.getElementById("dismiss").addEventListener("click", () =>
+    document.getElementById("toast").remove());
+</script>
+</body></html>

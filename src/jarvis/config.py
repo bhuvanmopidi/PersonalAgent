@@ -37,7 +37,17 @@ class LLMSettings(BaseModel):
     ollama_url: str = "http://127.0.0.1:11434"
     effort: Literal["low", "medium", "high"] = "low"
     timeout_s: float = Field(default=8.0, gt=0)
-    model: str = "claude-opus-5-5"  # planner / agent model for later phases
+    model: str = "claude-opus-5-5"  # planner model for later phases (direct Anthropic)
+    # the general agent (Phase 11): plans steps on any website, via OpenRouter
+    agent_model: str = "anthropic/claude-haiku-5.5"
+    agent_timeout_s: float = Field(default=30.0, gt=0)
+
+
+class AgentSettings(BaseModel):
+    max_steps: int = Field(default=20, ge=1, le=50)  # planning rounds (each 1–5 actions)
+    time_budget_s: float = Field(default=120.0, gt=0)
+    max_elements: int = Field(default=120, ge=10, le=400)  # page elements shown to the model
+    max_text_chars: int = Field(default=1500, ge=200, le=8000)  # page text excerpt
 
 
 class TTSSettings(BaseModel):
@@ -78,6 +88,7 @@ class Settings(BaseModel):
     hotkeys: HotkeySettings = HotkeySettings()
     router: RouterSettings = RouterSettings()
     llm: LLMSettings = LLMSettings()
+    agent: AgentSettings = AgentSettings()
     tts: TTSSettings = TTSSettings()
     listen: ListenSettings = ListenSettings()
     stt: STTSettings = STTSettings()

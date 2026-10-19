@@ -26,7 +26,14 @@ log = get_logger(__name__)
 POLL_S = 0.5
 
 _DETECT_JS = """(rules) => {
-  const frames = [...document.querySelectorAll('iframe')];
+  // only a frame you can SEE is a challenge: many sites preload invisible reCAPTCHA helpers
+  // (0×0, display:none) on every page, and those need nothing from the user
+  const seen = f => {
+    const r = f.getBoundingClientRect(), s = getComputedStyle(f);
+    return r.width >= 20 && r.height >= 20 && s.display !== 'none' &&
+      s.visibility !== 'hidden' && s.opacity !== '0';
+  };
+  const frames = [...document.querySelectorAll('iframe')].filter(seen);
   const frame = frames.find(f => rules.iframe_hosts.some(h => (f.src || '').includes(h)));
   if (frame) return 'iframe ' + frame.src.split('?')[0];
   const body = document.body ? document.body.innerText.slice(0, 3000) : '';

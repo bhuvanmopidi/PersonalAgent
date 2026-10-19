@@ -49,4 +49,12 @@ llm:                                # understands what the rules don't (Phase 7)
   ollama_url: http://127.0.0.1:11434
   effort: low
   timeout_s: 8
-  model: claude-opus-5-5            # planner / agent model (later phases)
+  model: claude-opus-5-5            # planner model (later phases, direct Anthropic)
+  agent_model: anthropic/claude-haiku-5.5   # the general agent (Phase 11), via OpenRouter
+  agent_timeout_s: 30
+
+agent:                              # the general agent: does tasks on any website (Phase 11)
+  max_steps: 20                     # planning rounds, each 1–5 actions
+  time_budget_s: 120
+  max_elements: 120                 # page elements shown to the model per step
+  max_text_chars: 1500              # page text excerpt per step

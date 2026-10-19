@@ -240,3 +240,36 @@ def test_sentences_containing_a_name_are_not_a_match(query: str) -> None:
         ]
     )
     assert index.find(query) is None  # a typo-level fuzzy match only, never "contains the word"
+
+
+@pytest.mark.parametrize(
+    ("query", "names"),
+    [
+        (
+            "latest mr beast video",
+            ["what is new in the latest version", "youtube"],
+        ),  # 1 shared word
+        ("mr beast channel in youtube", ["youtube"]),
+        ("open my project notes", ["notes", "project"]),
+    ],
+)
+def test_sharing_a_word_is_not_a_match(query: str, names: list[str]) -> None:
+    from jarvis.tiers.instant.app_index import best_match
+
+    assert best_match(query, names) is None
+
+
+@pytest.mark.parametrize(
+    ("query", "names", "expected"),
+    [
+        ("spotfy", ["spotify", "notepad"], "spotify"),  # typo
+        ("chrome", ["google chrome", "chromium docs"], "google chrome"),  # short form inside
+        ("whatsap", ["whatsapp"], "whatsapp"),
+        ("visual studio", ["visual studio code"], "visual studio code"),  # prefix
+    ],
+)
+def test_typos_and_short_forms_still_match(query: str, names: list[str], expected: str) -> None:
+    from jarvis.tiers.instant.app_index import best_match
+
+    found = best_match(query, names)
+    assert found is not None and found[0] == expected

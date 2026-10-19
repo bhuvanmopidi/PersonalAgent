@@ -268,6 +268,17 @@ intents:
       - '(?P<mode>ask)(?: me)? (?:before skipping|about) (?:the )?ads'
     action: { kind: set_ad_policy, target: '{mode}' }
 
+  - name: scroll_page
+    examples: ["scroll down", "scroll up a bit", "go to the top of the page", "show me more"]
+    slots: {"where": "down, up, top or bottom"}
+    description: "Scrolling"
+    speak: none
+    patterns:
+      - 'scroll (?P<where>down|up)(?: (?:a bit|a little|more|again))?(?: (?:on )?(?:the |this )?page)?'
+      - 'page (?P<where>down|up)'
+      - '(?:scroll|go|jump|take me) (?:back )?to the (?P<where>top|bottom)(?: of (?:the |this )?page)?'
+    action: { kind: browser_nav, target: 'scroll_{where}' }
+
   - name: go_back
     examples: ["go back", "previous page"]
     description: "Going back"

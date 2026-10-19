@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><title>Watch - VidTube</title></head>
+<body>
+  <h1 id="t">Video</h1>
+  <p id="state">Now playing</p>
+  <script>
+    const titles = {new1: "I Survived 100 Days", new2: "Speedrun Finale", old: "Minecraft Manhunt",
+                    zayn: "ZAYN - Dreamin (Official Lyric Video)"};
+    const v = new URLSearchParams(location.search).get("v");
+    document.getElementById("t").textContent = titles[v] || "Unknown video";
+    document.title = (titles[v] || "Unknown") + " - VidTube";
+  </script>
+</body></html>

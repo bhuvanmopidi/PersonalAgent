@@ -17,6 +17,8 @@
 | 3 | Voice out (TTS) | ✅ Done | [phase-03-tts.md](phases/phase-03-tts.md) |
 | 4 | Voice in (wake word, VAD, Whisper) | ✅ Done | [phase-04-voice-in.md](phases/phase-04-voice-in.md) |
 | 5 | Browser via CDP (YouTube, tabs, CAPTCHA handoff, page risk) | ✅ Done | [phase-05-browser.md](phases/phase-05-browser.md) |
-| 7 | LLM layer: rules → Claude or local model, benchmark | ✅ Done (benchmark numbers pending) | [phase-07-llm.md](phases/phase-07-llm.md) |
-| 6 | Amazon flow (needs the LLM) | ⏳ Next | — |
-| 8–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |
+| 7 | LLM layer: rules → Claude Haiku via OpenRouter / local model, benchmark | ✅ Done | [phase-07-llm.md](phases/phase-07-llm.md) |
+| 11 | **General browser agent** — any website, no site-specific code | ✅ Done | [phase-11-agent.md](phases/phase-11-agent.md) |
+| 11.2 | General desktop agent (Windows UI Automation) | ⏳ Next | — |
+| 6, 8–10 | Amazon, Gmail, Spotify, Word — as tasks for the general agent | Planned | — |
+| 12–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |

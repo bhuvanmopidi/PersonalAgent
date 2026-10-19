@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><title>Flights - FlyCheap</title></head>
+<body>
+  <h1 id="h">Flights</h1>
+  <ul><li>FlyCheap 101 — 08:05 — Rs 52,400</li><li>FlyCheap 202 — 21:40 — Rs 48,900</li></ul>
+<script>
+  const p = new URLSearchParams(location.search);
+  document.getElementById("h").textContent =
+    "Flights from " + p.get("from") + " to " + p.get("to") + " on " + p.get("date");
+</script>
+</body></html>

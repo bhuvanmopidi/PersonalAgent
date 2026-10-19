@@ -1,0 +1,6 @@
+<!doctype html>
+<html><head><title>Thanks - Shop</title></head>
+<body><h1>Thanks!</h1><p id="got"></p>
+<script>const p = new URLSearchParams(location.search);
+document.getElementById("got").textContent = "Got: " + p.get("name") + " from " + p.get("country");</script>
+</body></html>

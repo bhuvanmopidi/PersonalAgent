@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><title>Results - VidTube</title></head>
+<body>
+  <h1>Results</h1>
+  <p id="q"></p>
+  <ul>
+    <li><a href="channel.html">Dream</a> (channel, 30M subscribers)</li>
+    <li><a href="watch.html?v=zayn">ZAYN - Dreamin (Official Lyric Video)</a></li>
+    <li><a href="watch.html?v=old">Dream - Minecraft Manhunt (3 years ago)</a></li>
+  </ul>
+  <script>document.getElementById("q").textContent =
+    "Results for: " + (new URLSearchParams(location.search).get("q") || "");</script>
+</body></html>

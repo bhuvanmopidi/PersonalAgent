@@ -1,7 +1,9 @@
-"""LLM providers behind one interface: Claude (cloud) and a local model (Ollama).
+"""LLM providers behind one interface: OpenRouter / OpenAI / Claude (cloud) and Ollama (local).
 
-Both return the same structured RouterDecision. A provider that can't answer raises
-LLMUnavailable with a plain-words reason, so the router can fail over or explain.
+`decide(system, user, schema)` returns the model's answer parsed into `schema` (a Pydantic model):
+RouterDecision for understanding a command, AgentStep for the general agent's next actions.
+A provider that can't answer raises LLMUnavailable with a plain-words reason, so callers can fail
+over or explain.
 """
 
 from __future__ import annotations
@@ -12,10 +14,10 @@ import socket
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 from urllib.parse import urlparse
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from jarvis.config import LLMSettings
 from jarvis.planner.schema import RouterDecision
@@ -64,7 +66,7 @@ class Usage:
 
 @dataclass
 class LLMReply:
-    decision: RouterDecision
+    decision: Any  # an instance of the schema that was asked for (RouterDecision by default)
     provider: str
     model: str
     ms: float
@@ -72,10 +74,16 @@ class LLMReply:
 
 
 class LLMProvider(Protocol):
-    name: str  # "openai" | "claude" | "local"
+    name: str  # "openrouter" | "openai" | "claude" | "local"
     model: str
 
-    async def decide(self, system: str, user: str) -> LLMReply: ...
+    async def decide(
+        self,
+        system: str,
+        user: str,
+        schema: type[BaseModel] = RouterDecision,
+        max_tokens: int = 512,
+    ) -> LLMReply: ...
 
 
 class ClaudeProvider:
@@ -98,7 +106,13 @@ class ClaudeProvider:
             self._client = anthropic.AsyncAnthropic(timeout=self.timeout_s, max_retries=1)
         return self._client
 
-    async def decide(self, system: str, user: str) -> LLMReply:
+    async def decide(
+        self,
+        system: str,
+        user: str,
+        schema: type[BaseModel] = RouterDecision,
+        max_tokens: int = 512,
+    ) -> LLMReply:
         import anthropic
 
         start = time.perf_counter()
@@ -106,10 +120,10 @@ class ClaudeProvider:
             client = self._get_client()
             response = await client.messages.parse(
                 model=self.model,
-                max_tokens=1024,
+                max_tokens=max(max_tokens, 1024),
                 system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": user}],
-                output_format=RouterDecision,
+                output_format=schema,
                 output_config={"effort": self.effort},
             )
         except anthropic.AuthenticationError as exc:
@@ -166,9 +180,15 @@ class OpenAIProvider:
     key_env = "OPENAI_API_KEY"
     base_url: str | None = None  # None = api.openai.com
 
-    def __init__(self, settings: LLMSettings, on_offline: Callable[[], None] | None = None) -> None:
-        self.model = self.model_from(settings)
-        self.timeout_s = settings.timeout_s
+    def __init__(
+        self,
+        settings: LLMSettings,
+        on_offline: Callable[[], None] | None = None,
+        model: str | None = None,
+        timeout_s: float | None = None,
+    ) -> None:
+        self.model = model or self.model_from(settings)
+        self.timeout_s = timeout_s or settings.timeout_s
         self._client: openai.AsyncOpenAI | None = None
         self.on_offline = on_offline
 
@@ -189,7 +209,13 @@ class OpenAIProvider:
             )
         return self._client
 
-    async def decide(self, system: str, user: str) -> LLMReply:
+    async def decide(
+        self,
+        system: str,
+        user: str,
+        schema: type[BaseModel] = RouterDecision,
+        max_tokens: int = 512,
+    ) -> LLMReply:
         import openai
         from pydantic import ValidationError as SchemaError
 
@@ -200,9 +226,9 @@ class OpenAIProvider:
             completion = await client.chat.completions.parse(
                 model=self.model,
                 messages=[self.system_message(system), {"role": "user", "content": user}],
-                response_format=RouterDecision,
+                response_format=schema,
                 temperature=0,
-                max_completion_tokens=512,
+                max_completion_tokens=max_tokens,
             )
         except openai.AuthenticationError as exc:
             raise LLMUnavailable(
@@ -321,7 +347,13 @@ class OllamaProvider:
             self._client = ollama.AsyncClient(host=self.url, timeout=self.timeout_s)
         return self._client
 
-    async def decide(self, system: str, user: str) -> LLMReply:
+    async def decide(
+        self,
+        system: str,
+        user: str,
+        schema: type[BaseModel] = RouterDecision,
+        max_tokens: int = 512,
+    ) -> LLMReply:
         import ollama
 
         start = time.perf_counter()
@@ -333,7 +365,7 @@ class OllamaProvider:
             response = await self._get_client().chat(
                 model=self.model,
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                format=RouterDecision.model_json_schema(),
+                format=schema.model_json_schema(),
                 options={"temperature": 0},
                 keep_alive="30m",  # stay loaded on the GPU between commands
             )
@@ -358,7 +390,7 @@ class OllamaProvider:
             raise
 
         try:
-            decision = RouterDecision.model_validate_json(response.message.content or "")
+            decision = schema.model_validate_json(response.message.content or "")
         except ValidationError as exc:
             raise LLMUnavailable(
                 "the local model returned something unreadable", sticky=False

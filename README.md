@@ -4,9 +4,10 @@ Speak a task; Jarvis does it on your PC like a human would — across the browse
 Fast paths first (instant intents → learned skills), a general accessibility-tree LLM agent for new
 tasks, and a vision fallback for everything else. Local-first, with human checkpoints for risky actions.
 
-> Status: Phase 7 done — voice control, a real Chrome window Jarvis drives, and an LLM layer that
-> understands any phrasing (rules first; then Claude Haiku 5.5 via OpenRouter, or a local model, offline too).
-> Next: Phase 6, Amazon.
+> Status: Phase 11 done — a general browser agent: anything you ask that can be done on a website,
+> Jarvis does on the page itself (See → Think → Act → Check), with every step safety-checked. Plus voice
+> control, instant commands, and an LLM layer that understands any phrasing.
+> Next: Phase 11.2, the same agent for desktop apps.
 > Docs: [docs/](docs/README.md)
 
 ## Setup

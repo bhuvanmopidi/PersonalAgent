@@ -1,0 +1,118 @@
+<!doctype html>
+<html><head><title>FlyCheap - Book flights</title>
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  .bar { display: flex; gap: 24px; padding: 24px; align-items: flex-end; }
+  .box { cursor: pointer; border: 1px solid #ccc; padding: 10px; min-width: 160px; }
+  .box small { display: block; color: #666; }
+  .sug div, .cal div { cursor: pointer; }
+  .sug div { padding: 6px; border-bottom: 1px solid #eee; }
+  .cal { display: none; position: absolute; top: 110px; left: 380px; background: #fff;
+         border: 1px solid #999; padding: 8px; }
+  .cal div { display: inline-block; width: 28px; text-align: center; }
+  .pop { display: none; position: fixed; top: 60px; left: 300px; width: 700px; height: 400px;
+         background: #fff; border: 1px solid #333; box-shadow: 0 0 20px #0004; z-index: 10;
+         padding: 16px; }
+  .pop ul { list-style: none; padding: 0; margin: 0; }
+  .pop li { display: inline-block; width: 32px; text-align: center; border: 1px solid #ddd; }
+  .pop h4 { display: inline-block; margin: 0 16px 0 0; font-weight: normal; }
+  .pop .done { margin-top: 24px; background: #d22; color: #fff; padding: 8px 16px; border: 0; }
+  #search { padding: 14px 28px; font-size: 18px; margin-left: 420px; }
+</style></head>
+<body>
+  <h1>FlyCheap</h1>
+  <div class="bar">
+    <!-- custom field: a styled box that turns into an input only when clicked (like many travel sites) -->
+    <div class="box" id="from" aria-label="Departure From New Delhi inputbox"><small>Departure From</small><span>New Delhi</span></div>
+    <div class="box" id="to" aria-label="Arrival At Mumbai inputbox"><small>Arrival At</small><span>Mumbai</span></div>
+    <div class="box" id="date" aria-label="Departure Date inputbox"><small>Departure Date</small><span>Pick a date</span></div>
+    <!-- like real sites: the popup lives INSIDE its combobox and inherits cursor:pointer, the
+         counts are a row of <li>s and the classes are <h4><span>s; only "Done" is a real button -->
+    <div class="box" id="trav" role="combobox" aria-label="Travellers class inputbox"><small>Travellers &amp; Class</small><span>1 Traveller, Economy</span>
+      <div class="pop" id="pop">
+        <p>Adult</p>
+        <ul><li>1</li><li>2</li><li>3</li><li>4</li></ul>
+        <p>Travel class</p>
+        <h4><span>Economy</span></h4><h4><span>Business</span></h4>
+        <div><button class="done" id="done">Done</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="sug" id="sug"></div>
+  <div class="cal" id="cal"></div>
+  <button id="search">Search</button>
+<script>
+  const cities = ["Mumbai (BOM)", "London (LON) All airports", "Lonavala", "Muscat (MCT)", "New Delhi (DEL)"];
+  const state = {from: "New Delhi", to: "Mumbai", date: ""};
+  function makeInput(boxId, key) {
+    const box = document.getElementById(boxId);
+    box.addEventListener("click", () => {
+      if (box.querySelector("input")) return;
+      const input = document.createElement("input");
+      input.setAttribute("aria-label", box.querySelector("small").textContent);
+      box.querySelector("span").replaceWith(input);
+      input.focus();
+      input.addEventListener("input", () => {
+        const q = input.value.toLowerCase();
+        const sug = document.getElementById("sug");
+        sug.innerHTML = "";
+        if (!q) return;
+        cities.filter(c => c.toLowerCase().startsWith(q.slice(0, 3))).forEach(c => {
+          const d = document.createElement("div");
+          d.textContent = c;
+          d.addEventListener("click", () => {
+            state[key] = c.split(" (")[0];
+            const span = document.createElement("span");
+            span.textContent = state[key];
+            input.replaceWith(span);
+            sug.innerHTML = "";
+            if (key === "from") document.getElementById("to").click();
+          });
+          sug.append(d);
+        });
+      });
+    });
+  }
+  makeInput("from", "from");
+  makeInput("to", "to");
+  const months = ["October", "November", "December", "January"];
+  let shown = 0;
+  function showMonth() {
+    const cal = document.getElementById("cal");
+    const name = months[shown], year = name === "January" ? 2027 : 2026;
+    const num = String([10, 11, 12, 1][shown]).padStart(2, "0");
+    cal.innerHTML = "<b>" + name + " " + year + "</b> ";
+    const next = document.createElement("button");   // one month at a time, like real pickers
+    next.textContent = "Next Month";
+    next.disabled = shown === months.length - 1;
+    next.addEventListener("click", (e) => { e.stopPropagation(); shown += 1; showMonth(); });
+    cal.append(next, document.createElement("br"));
+    for (let d = 1; d <= 31; d++) {
+      const day = document.createElement("div");
+      day.textContent = d;
+      day.setAttribute("aria-label", "Choose " + name + " " + d + ", " + year);
+      day.addEventListener("click", () => {
+        state.date = year + "-" + num + "-" + String(d).padStart(2, "0");
+        document.querySelector("#date span").textContent = d + " " + name.slice(0, 3) + " " + year;
+        cal.style.display = "none";
+        document.getElementById("pop").style.display = "block";   // auto-opens over Search
+      });
+      cal.append(day);
+    }
+    cal.style.display = "block";
+  }
+  document.getElementById("date").addEventListener("click", () => { shown = 0; showMonth(); });
+  document.getElementById("done").addEventListener("click", (e) => {
+    e.stopPropagation();
+    document.getElementById("pop").style.display = "none";
+  });
+  document.getElementById("trav").addEventListener("click", (e) => {
+    if (!document.getElementById("pop").contains(e.target))
+      document.getElementById("pop").style.display = "block";
+  });
+  document.getElementById("search").addEventListener("click", () => {
+    const p = new URLSearchParams(state);
+    location.href = "flight-results.html?" + p.toString();
+  });
+</script>
+</body></html>

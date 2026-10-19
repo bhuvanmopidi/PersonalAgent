@@ -273,7 +273,10 @@ async def llm_ask(text: str, provider: str | None, repeat: int = 1) -> None:
                 print(f"{name:10} ✗ {routed.error}  ({routed.ms:.0f} ms)")
                 break
             d = routed.decision
-            what = f"{d.intent} {d.slot_dict()}" if d.kind == "run_intent" else repr(d.text)
+            what = (
+                f"{d.intent} {d.slot_dict()}" if d.kind == "run_intent"
+                else repr(d.goal) if d.kind == "task" else repr(d.text)
+            )  # fmt: skip
             u = routed.usage
             tokens = f"in {u.input_tokens} (cached {u.cache_read_tokens}) out {u.output_tokens}"
             print(f"{name:10} {d.kind}: {what}  ({routed.ms:.0f} ms · {tokens})")
@@ -309,6 +312,20 @@ async def eval_router(
     print(f"{len(cases)} cases · targets: {', '.join(targets)}")
     results = await run_eval(settings, targets, cases)
     text = report(results, cases)
+    print()
+    print(text)
+    print(f"Saved: {save_report(text)}")
+
+
+async def eval_agent(only: str) -> None:
+    from jarvis.tiers.structured.evaluate import report, run_eval, save_report
+
+    settings = load_settings()
+    setup_logging("WARNING")
+    ids = [x.strip() for x in only.split(",") if x.strip()] or None
+    print(f"agent model: {settings.llm.agent_model}")
+    results = await run_eval(settings, ids)
+    text = report(results, settings.llm.agent_model)
     print()
     print(text)
     print(f"Saved: {save_report(text)}")
@@ -361,6 +378,8 @@ def cli(argv: list[str] | None = None) -> None:
     p_eval.add_argument(
         "--per-tag", type=int, help="only N cases from each category (fits free-model daily limits)"
     )
+    p_eval_agent = sub.add_parser("eval-agent", help="benchmark the general agent on test sites")
+    p_eval_agent.add_argument("--tasks", default="", help="only these task ids, comma-separated")
     sub.add_parser("demo-safety", help="run fake actions through the safety layer")
     args = parser.parse_args(argv)
 
@@ -395,6 +414,8 @@ def cli(argv: list[str] | None = None) -> None:
                 args.providers, args.local_models, args.limit, args.per_tag, args.openrouter_models
             )
         )
+    elif args.command == "eval-agent":
+        asyncio.run(eval_agent(args.tasks))
     elif args.command == "demo-safety":
         asyncio.run(demo_safety())
     else:

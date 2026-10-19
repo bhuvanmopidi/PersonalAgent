@@ -9,6 +9,7 @@ Context for Claude Code. Read this fully before writing code.
 - **Phase report** covers: what was built (files + purpose) · how it works · why those choices · how to run/test · limitations / next-phase hooks · suggested commit message.
 - **Git rule:** Claude never runs `git init/add/commit/push/remote` or creates GitHub repos. Claude only suggests the commands; the user runs them.
 - Claude never switches Claude Code modes on its own; the user controls modes.
+- **No hardcoding (user rule):** anything the user asks must be *understood and executed* through the general path (LLM understanding + the See→Think→Act→Check agent). Don't add per-task / per-site flows, selectors or extra regex phrasings to make one case work. Regex rules are only a **speed shortcut** for exact common commands — nothing may depend on them. Hard rules are only for **safety** (policy, payments, OTP/CAPTCHA handoff, kill switch).
 
 ## 1. What we're building
 A **voice-controlled, general-purpose computer-use agent for Windows**. The user speaks naturally; the agent does the task on the PC **like a human would** — seeing the screen and using keyboard/mouse — across the **browser and desktop apps**.
@@ -105,7 +106,7 @@ User controls: history panel (view/delete), pause memory, forget everything.
 - **Gmail (UI):** Compose `div[gh='cm']`, To `input[aria-label='To recipients']`, Subject `input[name='subjectbox']`, Body `div[aria-label='Message Body']`, attach via `set_input_files` on `input[type='file'][name='Filedata']`, wait for attachment to show before send, Send `Ctrl+Enter`.
 - **Spotify (desktop UI):** launch → `Ctrl+L`/`Ctrl+K` focus search (or `spotify:search:<q>`) → type → click Top result play via UIA/vision → verify now-playing bar.
 - **Word:** `win32com.client.Dispatch("Word.Application")`, `Visible=True`, live `Selection.TypeText`. Dictation commands: "new paragraph", "bold that", "make a heading", "undo/delete that", "save as <name>" (`SaveAs2`), "stop dictation". Distinguish command vs content: exact phrases → wake-word prefix → LLM classifier for ambiguous. Optional LLM cleanup of punctuation/fillers.
-- Keep all selectors/shortcuts in **config files**, not hardcoded; LLM + accessibility tree as fallback when selectors break.
+- These notes are **optional site tips for the general agent** (Phase 11), not hand-built flows — the agent must work without them. Keep any tips in **config files**; the agent reads the page/accessibility tree itself.
 
 ## 8. Tech stack
 - **Voice:** wake word (openWakeWord), Silero VAD, faster-whisper (streaming), Piper TTS. Later: Indian languages (IndicConformer etc.).
@@ -156,12 +157,13 @@ PersonalAgent/
 | 3 | Voice out | Piper TTS, speak-while-acting |
 | 4 | Voice in | openWakeWord + Silero VAD + streaming faster-whisper → router |
 | 5 | Browser via CDP | Playwright CDP, YouTube flow, CAPTCHA handoff |
-| 6 | Amazon flow (**built after 7** — needs the LLM) | search → LLM pick → one-tap checkout |
+| 6 | Amazon (**after 11** — a task for the general agent) | agent shops; one-tap checkout safety rules |
 | 7 | LLM layer (**built before 6**) | rules → OpenRouter (Claude Haiku 5.5) / OpenAI / Claude / local Ollama model, offline fallback, provider switch by voice, router benchmark (`jarvis eval-router`) |
-| 8 | Gmail flow | compose/attach/read-back/confirm/send |
-| 9 | Spotify via UIA | pywinauto + `spotify:search:` |
-| 10 | Word dictation via COM | live typing + dictation commands |
-| 11 | Tier-3 structured agent | UIA/DOM observer, batched See→Think→Act→Check; **AI risk judge** (raise-only); per-app risky shortcuts |
+| 8 | Gmail (**after 11**, agent task) | compose/attach/read-back/confirm/send via the agent + send confirmation |
+| 9 | Spotify (**after 11.2**, agent task) | desktop agent + `spotify:search:` shortcut |
+| 10 | Word dictation (**after 11.2**) | live typing + dictation commands |
+| 11 | **General browser agent — next** (any website) | DOM observer, batched See→Think→Act→Check with Claude Haiku via OpenRouter; every step through ActionRunner; **AI risk hint** (raise-only); prompt-injection guard; router hands unmatched requests to it |
+| 11.2 | General desktop agent | same loop on Windows apps via UI Automation |
 | 11b | Shell commands | `run_command` kind: PowerShell AST parsing + alias resolution, verb semantics, read-only allowlist → GREEN, else confirm, obfuscation → refuse, source tracking (untrusted screen content never auto), no admin, `-WhatIf` previews, Recycle Bin deletes |
 | 12 | Skills (Tier 2) | learn, replay, retire |
 | 13 | Storage | SQLCipher + DPAPI, sqlite-vec, history |

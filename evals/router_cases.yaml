@@ -18,6 +18,7 @@ cases:
   - { tag: exact, text: "close notepad", intent: close_app, slots: { app: notepad } }
   - { tag: exact, text: "lock the screen", intent: lock }
   - { tag: exact, text: "next video", intent: next_video }
+  - { tag: exact, text: "scroll down", intent: scroll_page, slots: { where: down } }
   - { tag: exact, text: "go to 5:30", intent: media_seek_to, slots: { time: "5:30" } }
   - { tag: exact, text: "google weather in hyderabad", intent: web_search, slots: { query: weather in hyderabad } }
   - { tag: exact, text: "speed 1.5x", intent: media_speed, slots: { rate: "1.5" } }
@@ -47,6 +48,8 @@ cases:
   - { tag: paraphrase, text: "make the video bigger", intent: fullscreen }
   - { tag: paraphrase, text: "play it a bit quicker", intent: media_faster }
   - { tag: paraphrase, text: "back to the previous page", intent: go_back }
+  - { tag: paraphrase, text: "take me to the very top of this page", intent: scroll_page, slots: { where: top } }
+  - { tag: paraphrase, text: "move the page down a little", intent: scroll_page, slots: { where: down } }
   - { tag: paraphrase, text: "look up the price of bitcoin", intent: web_search, slots: { query: price of bitcoin } }
   - { tag: paraphrase, text: "i'm stepping away, lock my computer", intent: lock }
   - { tag: paraphrase, text: "don't ask me about ads, just skip them", intent: ad_policy, slots: { mode: always } }
@@ -73,7 +76,15 @@ cases:
   # ---- follow-ups (need the previous turn) ----
   - { tag: context, context: "volume 30", text: "a bit more", intent: volume_up }
   - { tag: context, context: "play lofi on youtube", text: "skip this one", intent: next_video }
+  - { tag: context, context: "open amazon.com and check mobiles under 60000rs", text: "show me more of them", intent: scroll_page, slots: { where: down } }
   - { tag: context, context: "open notepad", text: "close it now", intent: close_app, slots: { app: notepad } }
+  # Jarvis asked for a missing detail → the answer continues the same request
+  - { tag: context, context: "check flights from bombay to delhi on yatra.com",
+      context_did: "task(goal=check flights from Bombay to Delhi on yatra.com) -> Which date do you want to fly?",
+      text: "30th october", kind: task, goal_has: [bombay, delhi, "30"] }
+  - { tag: context, context: "email my resume on gmail",
+      context_did: "task(goal=email my resume on Gmail) -> Who should I send it to?",
+      text: "to arjun", kind: task, goal_has: [resume, arjun] }
 
   # ---- questions → answer, don't act ----
   - { tag: question, text: "what all can you do", kind: answer }
@@ -82,12 +93,15 @@ cases:
   - { tag: question, text: "who are you", kind: answer }
   - { tag: question, text: "can you control spotify", kind: answer }
 
-  # ---- not supported yet → say so, don't act ----
-  - { tag: unsupported, text: "send a whatsapp to mom", kind: unsupported }
-  - { tag: unsupported, text: "email my resume to arjun", kind: unsupported }
-  - { tag: unsupported, text: "order boat airdopes from amazon", kind: unsupported }
+  # ---- risky website work → a task for the browser agent (it confirms send / pay itself);
+  #      never a look-alike intent. (Phase 7 expected "unsupported" here — before the agent.) ----
+  - { tag: task, text: "send a whatsapp to mom", kind: task, goal_has: [whatsapp, mom] }
+  - { tag: task, text: "email my resume to arjun", kind: task, goal_has: [resume, arjun] }
+  - { tag: task, text: "order boat airdopes from amazon", kind: task, goal_has: [airdopes, amazon] }
+  - { tag: task, text: "book an uber to the airport", kind: task, goal_has: [uber, airport] }
+
+  # ---- not supported yet (not a website task) → say so, don't act ----
   - { tag: unsupported, text: "delete all my downloads", kind: unsupported }
-  - { tag: unsupported, text: "book an uber to the airport", kind: unsupported }
   - { tag: unsupported, text: "turn off the wifi", kind: unsupported }
 
   # ---- too vague → ask back, don't act ----

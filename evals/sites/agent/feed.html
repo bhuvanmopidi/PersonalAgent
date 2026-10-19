@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><title>Endless feed</title></head>
+<body>
+  <h1>Feed</h1>
+  <div id="feed"></div>
+<script>
+  // an endless feed: more posts load whenever you near the bottom (social sites, shop listings)
+  let n = 0;
+  function more() {
+    for (let i = 0; i < 10; i++, n++) {
+      const d = document.createElement("p");
+      d.style.height = "120px";
+      d.innerHTML = `<a href="#p${n}">Post ${n}</a>`;
+      document.getElementById("feed").append(d);
+    }
+  }
+  more();
+  addEventListener("scroll", () => {
+    if (innerHeight + scrollY > document.body.scrollHeight - 400) more();
+  });
+</script>
+</body></html>
