@@ -10,7 +10,7 @@ it reads the screen and uses the keyboard and mouse. It never uses third-party a
    │
  ① Voice      wake word → VAD → streaming speech-to-text                (Phase 4)
    │
- ② Router     resolve context → pick the fastest tier that can do it    (Phases 2, 14)
+ ② Router     rules → LLM (Claude / local model) → intent, answer, or a question  (Phases 2, 7, 14)
    │
  ③ Tiers      1 instant · 2 skill replay · 3 text agent · 4 vision agent (Phases 2, 11, 12, 15)
    │            each produces Actions
@@ -114,6 +114,18 @@ Action ─► ActionRunner: annotate (current tab URL → page_url) → policy �
 Chrome 136+ won't let any program drive your normal profiles, so Jarvis uses its own Chrome data
 folder (sign in once with `jarvis browser setup`). Details: [phases/phase-05-browser.md](phases/phase-05-browser.md).
 
+## Understanding commands (built in Phase 7)
+
+```
+text ─► rules (0.1 ms) ─miss─► LLMRouter ─► offline: local model (Ollama) · online: OpenRouter / OpenAI / Claude / local
+                                           ─► RouterDecision: run_intent → validated Intent → ActionRunner
+                                                              answer / clarify / unsupported → spoken
+```
+
+The LLM's menu is generated from `intents.yaml`, so it can only choose things Jarvis can do, and the
+safety layer is unchanged. Every decision is logged (redacted) for the Phase 14 classifier. Details
+and the benchmark: [phases/phase-07-llm.md](phases/phase-07-llm.md).
+
 ## Cross-cutting pieces
 
 | Piece | File | Purpose |
@@ -132,4 +144,5 @@ folder (sign in once with `jarvis browser setup`). Details: [phases/phase-05-bro
 | Text-to-speech: Piper + SAPI fallback, speak-while-acting, spoken confirmations | ✅ Phase 3 |
 | Voice input: wake word, push-to-talk, VAD, Whisper (GPU), voice confirmations, "stop" | ✅ Phase 4 |
 | Browser: Jarvis Chrome over CDP, YouTube play/ads, media + tab control, CAPTCHA handoff, page-aware risk | ✅ Phase 5 |
-| LLM layer, Amazon/Gmail flows, desktop app flows, AI agents, skills, memory | Planned |
+| LLM layer: rules → OpenRouter (Claude Haiku 5.5) / OpenAI / Claude / local model (Ollama), offline fallback, router benchmark | ✅ Phase 7 |
+| Amazon/Gmail flows, desktop app flows, AI agents, skills, memory | Planned |

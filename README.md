@@ -4,9 +4,9 @@ Speak a task; Jarvis does it on your PC like a human would — across the browse
 Fast paths first (instant intents → learned skills), a general accessibility-tree LLM agent for new
 tasks, and a vision fallback for everything else. Local-first, with human checkpoints for risky actions.
 
-> Status: Phase 5 done — voice-controlled Tier-1 commands plus a real Chrome window Jarvis drives
-> ("Hey Jarvis, play lofi on YouTube" … "pause"), CAPTCHA handoff and page-aware safety.
-> Next: Phase 7, the LLM layer.
+> Status: Phase 7 done — voice control, a real Chrome window Jarvis drives, and an LLM layer that
+> understands any phrasing (rules first; then Claude Haiku 5.5 via OpenRouter, or a local model, offline too).
+> Next: Phase 6, Amazon.
 > Docs: [docs/](docs/README.md)
 
 ## Setup

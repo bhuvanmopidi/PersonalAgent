@@ -112,7 +112,7 @@ User controls: history panel (view/delete), pause memory, forget everything.
 - **Desktop:** pywinauto / UI Automation, pyautogui, win32com, mss (screenshots).
 - **Browser:** Playwright over CDP.
 - **Vision fallback:** OmniParser + vision LLM.
-- **Brain:** small router (embeddings + classifier) + planner LLM via provider-agnostic interface (PydanticAI preferred). First provider: Claude (Anthropic API).
+- **Brain:** rules → LLM router (Phase 7: **OpenRouter → Claude Haiku 5.5** (default online — chosen by benchmark: 92% / 6% wrong / 1.7 s; OpenRouter credits, not direct Claude/OpenAI), OpenAI gpt-4o-mini, Claude Haiku 5.5, or a local Ollama model (qwen2.5:3b); **offline always the local model**; online provider user-selectable, default confirmed from `jarvis eval-router`) → later embeddings + classifier (Phase 14). Provider-agnostic interface in `planner/llm.py` using the **official `openai`, `anthropic` and `ollama` SDKs** (chosen over PydanticAI: one structured call, fewer deps). Planner/agent model for later phases: Claude Opus 5.5.
 - **Backend:** Python 3.12 (asyncio), local FastAPI/websocket for UI. Env/deps managed with **uv**.
 - **Shell UI:** Tauri tray app — global hotkey, status overlay, confirmation dialogs, history panel.
 - **Storage:** SQLite + SQLCipher + sqlite-vec.
@@ -157,7 +157,7 @@ PersonalAgent/
 | 4 | Voice in | openWakeWord + Silero VAD + streaming faster-whisper → router |
 | 5 | Browser via CDP | Playwright CDP, YouTube flow, CAPTCHA handoff |
 | 6 | Amazon flow (**built after 7** — needs the LLM) | search → LLM pick → one-tap checkout |
-| 7 | LLM provider interface | PydanticAI, Anthropic first, Ollama stub |
+| 7 | LLM layer (**built before 6**) | rules → OpenRouter (Claude Haiku 5.5) / OpenAI / Claude / local Ollama model, offline fallback, provider switch by voice, router benchmark (`jarvis eval-router`) |
 | 8 | Gmail flow | compose/attach/read-back/confirm/send |
 | 9 | Spotify via UIA | pywinauto + `spotify:search:` |
 | 10 | Word dictation via COM | live typing + dictation commands |

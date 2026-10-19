@@ -6,7 +6,7 @@ kinds:
   green:
     [launch_app, close_app, open_url, open_folder, find_file, set_volume, set_brightness,
      lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait,
-     youtube_play, media_key, browser_nav, set_ad_policy]
+     youtube_play, media_key, browser_nav, set_ad_policy, set_llm_provider, llm_status]
   yellow: [send, submit_form, delete_file, move_file, place_order]
   payment: [pay]
   red: [enter_password, enter_otp, login, solve_captcha, change_system_setting]

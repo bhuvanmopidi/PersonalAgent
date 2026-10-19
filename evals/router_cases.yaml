@@ -1,0 +1,96 @@
+# Router benchmark (Phase 7): what should Jarvis understand from each sentence?
+#   uv run jarvis eval-router --providers rules,claude,local
+# kind: run_intent (default) needs `intent` (+ `slots` that must match); answer / clarify /
+# unsupported must NOT act. `context` is a previous turn, for follow-ups.
+# Slot values match case-insensitively; numbers by value; text by fuzzy similarity (≥ 80).
+
+cases:
+  # ---- exact commands (the rules should get these) ----
+  - { tag: exact, text: "open spotify", intent: open_app, slots: { app: spotify } }
+  - { tag: exact, text: "volume 30", intent: volume_set, slots: { value: "30" } }
+  - { tag: exact, text: "pause", intent: media_pause }
+  - { tag: exact, text: "play lofi on youtube", intent: youtube_play, slots: { query: lofi } }
+  - { tag: exact, text: "mute", intent: mute }
+  - { tag: exact, text: "brightness 50", intent: brightness_set, slots: { value: "50" } }
+  - { tag: exact, text: "open downloads", intent: open_folder, slots: { folder: downloads } }
+  - { tag: exact, text: "find my resume", intent: find_file, slots: { query: resume } }
+  - { tag: exact, text: "fast forward by 10 min", intent: media_forward, slots: { amount: "10", unit: min } }
+  - { tag: exact, text: "close notepad", intent: close_app, slots: { app: notepad } }
+  - { tag: exact, text: "lock the screen", intent: lock }
+  - { tag: exact, text: "next video", intent: next_video }
+  - { tag: exact, text: "go to 5:30", intent: media_seek_to, slots: { time: "5:30" } }
+  - { tag: exact, text: "google weather in hyderabad", intent: web_search, slots: { query: weather in hyderabad } }
+  - { tag: exact, text: "speed 1.5x", intent: media_speed, slots: { rate: "1.5" } }
+
+  # ---- paraphrases (the reason for the LLM) ----
+  - { tag: paraphrase, text: "make it louder bro", intent: volume_up }
+  - { tag: paraphrase, text: "it's way too loud", intent: volume_down }
+  - { tag: paraphrase, text: "set the volume to half", intent: volume_set, slots: { value: "50" } }
+  - { tag: paraphrase, text: "crank the volume all the way up", intent: volume_set, slots: { value: "100" } }
+  - { tag: paraphrase, text: "shh, silence everything", intent: mute }
+  - { tag: paraphrase, text: "fast forward ten minutes", intent: media_forward, slots: { amount: "10", unit: minutes } }
+  - { tag: paraphrase, text: "skip ahead a couple of minutes", intent: media_forward, slots: { amount: "2", unit: minutes } }
+  - { tag: paraphrase, text: "go back thirty seconds in the video", intent: media_rewind, slots: { amount: "30", unit: seconds } }
+  - { tag: paraphrase, text: "start this video from the beginning", intent: media_restart }
+  - { tag: paraphrase, text: "can you hold the video for a sec", intent: media_pause }
+  - { tag: paraphrase, text: "ok carry on playing", intent: media_resume }
+  - { tag: paraphrase, text: "this one's boring, next", intent: next_video }
+  - { tag: paraphrase, text: "put on some hardstyle music", intent: youtube_play, slots: { query: hardstyle music } }
+  - { tag: paraphrase, text: "i wanna watch mr beast", intent: youtube_play, slots: { query: mr beast } }
+  - { tag: paraphrase, text: "show me how to make pasta on youtube", intent: youtube_play, slots: { query: how to make pasta } }
+  - { tag: paraphrase, text: "launch that insta thing", intent: open_app, slots: { app: instagram } }
+  - { tag: paraphrase, text: "fire up vs code", intent: open_app, slots: { app: vs code } }
+  - { tag: paraphrase, text: "get rid of notepad", intent: close_app, slots: { app: notepad } }
+  - { tag: paraphrase, text: "where did i put my project report", intent: find_file, slots: { query: project report } }
+  - { tag: paraphrase, text: "take me to my downloads", intent: open_folder, slots: { folder: downloads } }
+  - { tag: paraphrase, text: "the screen is too bright", intent: brightness_down }
+  - { tag: paraphrase, text: "make the video bigger", intent: fullscreen }
+  - { tag: paraphrase, text: "play it a bit quicker", intent: media_faster }
+  - { tag: paraphrase, text: "back to the previous page", intent: go_back }
+  - { tag: paraphrase, text: "look up the price of bitcoin", intent: web_search, slots: { query: price of bitcoin } }
+  - { tag: paraphrase, text: "i'm stepping away, lock my computer", intent: lock }
+  - { tag: paraphrase, text: "don't ask me about ads, just skip them", intent: ad_policy, slots: { mode: always } }
+  - { tag: paraphrase, text: "jump to the ten minute mark", intent: media_seek_to }
+
+  - { tag: paraphrase, text: "open mr beast channel in youtube", intent: youtube_search, slots: { query: mr beast channel } }
+
+  # ---- speech-recognition mishearings ----
+  - { tag: mishearing, text: "pulse the video", intent: media_pause }
+  - { tag: mishearing, text: "open spot if i", intent: open_app, slots: { app: spotify } }
+  - { tag: mishearing, text: "volume thirty", intent: volume_set, slots: { value: "30" } }
+  - { tag: mishearing, text: "play lo fi on you tube", intent: youtube_play, slots: { query: lofi } }
+  - { tag: mishearing, text: "fast forward by 10 mins.", intent: media_forward, slots: { amount: "10" } }
+  - { tag: mishearing, text: "open what's app", intent: open_app, slots: { app: whatsapp } }
+
+  # ---- Indian-English phrasing ----
+  - { tag: indian_english, text: "do one thing, increase the volume", intent: volume_up }
+  - { tag: indian_english, text: "kindly open the youtube", intent: open_app, slots: { app: youtube } }
+  - { tag: indian_english, text: "put arijit singh songs", intent: youtube_play, slots: { query: arijit singh songs } }
+  - { tag: indian_english, text: "reduce the brightness little bit", intent: brightness_down }
+  - { tag: indian_english, text: "close the chrome itself", intent: close_app, slots: { app: chrome } }
+  - { tag: indian_english, text: "only stop the video na", intent: media_pause }
+
+  # ---- follow-ups (need the previous turn) ----
+  - { tag: context, context: "volume 30", text: "a bit more", intent: volume_up }
+  - { tag: context, context: "play lofi on youtube", text: "skip this one", intent: next_video }
+  - { tag: context, context: "open notepad", text: "close it now", intent: close_app, slots: { app: notepad } }
+
+  # ---- questions → answer, don't act ----
+  - { tag: question, text: "what all can you do", kind: answer }
+  - { tag: question, text: "what's 18 percent of 2400", kind: answer }
+  - { tag: question, text: "what is the capital of france", kind: answer }
+  - { tag: question, text: "who are you", kind: answer }
+  - { tag: question, text: "can you control spotify", kind: answer }
+
+  # ---- not supported yet → say so, don't act ----
+  - { tag: unsupported, text: "send a whatsapp to mom", kind: unsupported }
+  - { tag: unsupported, text: "email my resume to arjun", kind: unsupported }
+  - { tag: unsupported, text: "order boat airdopes from amazon", kind: unsupported }
+  - { tag: unsupported, text: "delete all my downloads", kind: unsupported }
+  - { tag: unsupported, text: "book an uber to the airport", kind: unsupported }
+  - { tag: unsupported, text: "turn off the wifi", kind: unsupported }
+
+  # ---- too vague → ask back, don't act ----
+  - { tag: vague, text: "open it", kind: clarify }
+  - { tag: vague, text: "do the thing", kind: clarify }
+  - { tag: vague, text: "close that", kind: clarify }

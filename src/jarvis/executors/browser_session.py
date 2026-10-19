@@ -50,6 +50,7 @@ class PageSource(Protocol):
     async def pages(self) -> list[Page]: ...  # connects (and launches) if needed
     async def new_page(self) -> Page: ...
     def open_pages(self) -> list[Page]: ...  # only if already connected — never launches
+    async def reset(self) -> None: ...  # forget a connection that went stale (window closed)
 
 
 def find_chrome(configured: str = "") -> Path | None:
@@ -130,11 +131,15 @@ class BrowserSession:
 
     @property
     def connected(self) -> bool:
-        return self._browser is not None and self._browser.is_connected()
+        return (
+            self._browser is not None
+            and self._browser.is_connected()
+            and bool(self._browser.contexts)
+        )
 
     async def connect(self, launch: bool = True) -> BrowserContext:
         async with self._lock:
-            if self._browser is None or not self._browser.is_connected():
+            if not self.connected:
                 port = self.settings.cdp_port
                 if not await asyncio.to_thread(cdp_ready, port):
                     if not launch:
@@ -149,6 +154,7 @@ class BrowserSession:
                 log.info(
                     "connected to Jarvis Chrome in %.0f ms", (time.perf_counter() - start) * 1000
                 )
+            assert self._browser is not None
             contexts = self._browser.contexts
             if not contexts:
                 raise BrowserUnavailable("Chrome has no window open")
@@ -156,7 +162,7 @@ class BrowserSession:
 
     async def pages(self) -> list[Page]:
         context = await self.connect()
-        return list(context.pages) or [await context.new_page()]
+        return [p for p in context.pages if not p.is_closed()] or [await context.new_page()]
 
     async def new_page(self) -> Page:
         return await (await self.connect()).new_page()
@@ -166,7 +172,17 @@ class BrowserSession:
             return []
         assert self._browser is not None
         contexts = self._browser.contexts
-        return list(contexts[0].pages) if contexts else []
+        return [p for p in contexts[0].pages if not p.is_closed()] if contexts else []
+
+    async def reset(self) -> None:
+        """Forget the current connection; the next use reconnects, relaunching Chrome if needed."""
+        async with self._lock:
+            browser, self._browser = self._browser, None
+        if browser is not None:
+            try:
+                await browser.close()  # for a CDP connection this only disconnects
+            except Exception:
+                log.debug("stale browser disconnect failed", exc_info=True)
 
     async def close(self) -> None:
         """Disconnect (Chrome itself stays open)."""

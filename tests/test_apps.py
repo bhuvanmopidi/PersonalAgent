@@ -225,3 +225,18 @@ def test_real_aliases_file_loads() -> None:
     aliases = load_aliases()
     assert aliases.apps["chrome"].process == "chrome"
     assert aliases.sites["amazon"].startswith("https://")
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["mr beast channel in youtube", "the notes from my meeting", "my spotify playlist please"],
+)
+def test_sentences_containing_a_name_are_not_a_match(query: str) -> None:
+    index = AppIndex(
+        [
+            *ENTRIES,
+            AppEntry(name="YouTube", app_id="Chrome._crx_yt"),
+            AppEntry(name="Notes", app_id="N"),
+        ]
+    )
+    assert index.find(query) is None  # a typo-level fuzzy match only, never "contains the word"

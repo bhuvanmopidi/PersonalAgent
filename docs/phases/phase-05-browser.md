@@ -131,6 +131,15 @@ uv run jarvis browser status
 uv run jarvis run                            # "Hey Jarvis, play lofi on YouTube" … "pause"
 ```
 
+## Closing the Jarvis Chrome window (fix from user testing)
+
+If you close the window (or its tab) and give a browser command, Jarvis notices the page is gone
+(Playwright's "Target page, context or browser has been closed"), drops the stale connection
+(`BrowserSession.reset()`), reopens the window and does the command once more. A second failure gives
+a plain "couldn't be reopened" message. Closed tabs are never picked, and browser errors log one line
+(the traceback only with debug logging). Measured: close window → "play lofi on youtube" → reopened and
+playing in 5.6 s.
+
 ## Limitations / next
 
 - YouTube account problems in the Jarvis Chrome window (seen: `youtube.com/oops`, "An error occurred

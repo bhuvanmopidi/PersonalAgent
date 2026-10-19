@@ -56,7 +56,15 @@ def best_match(
     if prefixed:
         return min(prefixed, key=len), "prefix"
     match = process.extractOne(q, names, scorer=scorer, score_cutoff=FUZZY_CUTOFF)
-    return (match[0], "fuzzy") if match else None
+    if not match:
+        return None
+    name = match[0]
+    # Fuzzy is for typos and short partial names ("spotfy", "chrome" → google chrome), not for
+    # sentences that merely contain a name ("mr beast channel in youtube" is not YouTube).
+    similar = fuzz.ratio(q, name) >= FUZZY_CUTOFF
+    if not similar and len(q.split()) > len(name.split()) + 1:
+        return None
+    return name, "fuzzy"
 
 
 _ENTRIES = TypeAdapter(list[AppEntry])

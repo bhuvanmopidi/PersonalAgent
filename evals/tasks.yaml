@@ -92,3 +92,17 @@ tasks:
       expected_tier: 1, check: "playbackRate 1.5 → 1.25 → 1", max_latency_ms: 300 }
   - { id: yt_seek_live, command: "fast forward (on a live stream)", expected_intent: media_forward,
       expected_tier: 1, check: "refused: live stream", max_latency_ms: 300 }
+  # ---- LLM layer (Phase 7) ----
+  - { id: llm_paraphrase, command: "make it louder bro", expected_intent: volume_up, expected_tier: 1,
+      check: "rules miss → LLM → volume_up through ActionRunner", max_latency_ms: 2000 }
+  - { id: llm_question, command: "what all can you do", expected_intent: none, expected_tier: 0,
+      check: "spoken answer from the capability list; nothing executed", max_latency_ms: 2500 }
+  - { id: llm_unsupported, command: "send a whatsapp to mom", expected_intent: none, expected_tier: 0,
+      check: "'I can't do that yet' with a reason; nothing executed", max_latency_ms: 2500 }
+  - { id: llm_offline, command: "make it louder bro (Wi-Fi off)", expected_intent: volume_up,
+      expected_tier: 1, check: "local model answers; Claude not waited on", max_latency_ms: 2500 }
+  - { id: llm_pronoun, command: "open it (no context)", expected_intent: none, expected_tier: 0,
+      check: "never opens an app called 'it'; asks which one", max_latency_ms: 2500 }
+  - { id: llm_switch, command: "use the local model / which model are you using",
+      expected_intent: use_local_model, expected_tier: 1, check: "provider switched and reported",
+      max_latency_ms: 300 }

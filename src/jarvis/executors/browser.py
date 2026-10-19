@@ -66,6 +66,18 @@ def _float(value: object) -> float | None:
         return None
 
 
+def is_closed_error(exc: BaseException) -> bool:
+    """The page, tab, window or Chrome itself went away (Playwright's TargetClosedError isn't
+    exported, so match by name and message)."""
+    if type(exc).__name__ == "TargetClosedError":
+        return True
+    text = str(exc).lower()
+    return any(
+        s in text
+        for s in ("has been closed", "target closed", "browser closed", "connection closed")
+    )
+
+
 def is_blank(url: str) -> bool:
     return not url or url.startswith(_BLANK)
 
@@ -96,6 +108,28 @@ class BrowserExecutor:
         if action.kind == "set_ad_policy":
             return self._set_ad_policy(action.target)
         from playwright.async_api import Error as PlaywrightError
+
+        try:
+            return await self._run(action)
+        except PlaywrightError as exc:
+            if not is_closed_error(exc) or self.session is None:
+                raise
+            # the Jarvis Chrome window (or its tab) was closed under us — like a person would,
+            # reopen it and do the same thing again, once
+            log.info("Jarvis Chrome was closed during %s — reopening and retrying", action.kind)
+            await self.session.reset()
+            try:
+                return await self._run(action)
+            except PlaywrightError as again:
+                first_line = str(again).splitlines()[0]
+                return fail(
+                    "browser_closed",
+                    f"The Jarvis Chrome window was closed and couldn't be reopened: {first_line}",
+                )
+
+    async def _run(self, action: Action) -> ActionResult:
+        """One attempt. Closed-window errors propagate (execute retries); others become results."""
+        from playwright.async_api import Error as PlaywrightError
         from playwright.async_api import TimeoutError as PlaywrightTimeout
 
         try:
@@ -113,8 +147,12 @@ class BrowserExecutor:
         except PlaywrightTimeout:
             return fail("timeout", "The page took too long.")
         except PlaywrightError as exc:
-            log.warning("browser error during %s", action.kind, exc_info=True)
-            return fail("browser_error", f"Chrome error: {str(exc).splitlines()[0]}")
+            if is_closed_error(exc):
+                raise
+            first_line = str(exc).splitlines()[0]
+            log.warning("browser error during %s: %s", action.kind, first_line)  # one line
+            log.debug("browser error details", exc_info=True)  # traceback only with debug logs
+            return fail("browser_error", f"Chrome error: {first_line}")
         return fail("unsupported", f"Browser executor can't do '{action.kind}'")
 
     # ---- opening pages ----------------------------------------------------------------------

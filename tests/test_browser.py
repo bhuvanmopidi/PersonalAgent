@@ -45,6 +45,9 @@ class HeadlessSession:
     def open_pages(self) -> list[Page]:
         return list(self.context.pages)
 
+    async def reset(self) -> None:
+        self.resets = getattr(self, "resets", 0) + 1
+
 
 class DownSession:
     """Chrome can't be reached."""
@@ -57,6 +60,9 @@ class DownSession:
 
     def open_pages(self) -> list[Page]:
         return []
+
+    async def reset(self) -> None:
+        return None
 
 
 class WaitingConfirmer(ScriptedConfirmer):
@@ -285,3 +291,57 @@ async def test_seek_refused_on_live_stream(session: HeadlessSession) -> None:
     args = {"direction": "forward", "amount": "10", "unit": "min"}
     result = await runner.run_action(Action(kind="media_key", target="seek", args=args))
     assert result.error == "live_stream"
+
+
+class ClosingSession(HeadlessSession):
+    """The window is gone: every tab Jarvis gets is closed under it (`closes` times), like after
+    the user closed the Jarvis Chrome window."""
+
+    def __init__(self, context: BrowserContext, closes: int = 2) -> None:
+        super().__init__(context)
+        self.closes = closes
+        self.resets = 0
+
+    async def pages(self) -> list[Page]:
+        pages = await super().pages()
+        if self.closes > 0:
+            self.closes -= 1
+            await pages[-1].close()  # closed under Jarvis' feet
+        return pages
+
+    async def new_page(self) -> Page:
+        page = await super().new_page()
+        if self.closes > 0:
+            self.closes -= 1
+            await page.close()
+        return page
+
+    async def reset(self) -> None:
+        self.resets += 1
+
+
+async def test_window_closed_mid_action_reopens_and_retries(browser: Browser) -> None:
+    session = ClosingSession(await browser.new_context())
+    runner, *_ = make(session)
+    result = await runner.run_action(Action(kind="youtube_play", target="lofi"))
+    assert result.ok, result.observation
+    assert session.resets == 1 and "Playing" in result.observation
+
+
+async def test_window_closed_twice_gives_a_plain_message(browser: Browser) -> None:
+    session = ClosingSession(await browser.new_context(), closes=10)
+    runner, *_ = make(session)
+    result = await runner.run_action(Action(kind="youtube_play", target="lofi"))
+    assert result.error == "browser_closed" and "couldn't be reopened" in result.observation
+
+
+def test_closed_errors_are_recognised() -> None:
+    from jarvis.executors.browser import is_closed_error
+
+    class TargetClosedError(Exception): ...
+
+    assert is_closed_error(TargetClosedError("x"))
+    assert is_closed_error(
+        Exception("Page.evaluate: Target page, context or browser has been closed")
+    )
+    assert not is_closed_error(Exception("net::ERR_NAME_NOT_RESOLVED"))

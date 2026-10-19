@@ -19,13 +19,25 @@ class HotkeySettings(BaseModel):
 
 
 class RouterSettings(BaseModel):
+    # hybrid: rules, then the LLM for what they miss · llm_first: the reverse (an experiment)
+    mode: Literal["hybrid", "llm_first"] = "hybrid"
     embedding_match_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
     classifier_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
 class LLMSettings(BaseModel):
-    provider: str = "anthropic"
-    model: str = "claude-opus-5-5"
+    enabled: bool = True
+    # online: which model understands what the rules miss. Offline it's always the local model.
+    online_provider: Literal["openrouter", "openai", "claude", "local"] = "openrouter"
+    # OpenRouter (needs OPENROUTER_API_KEY): Claude Haiku 5.5, chosen by `jarvis eval-router`
+    openrouter_model: str = "anthropic/claude-haiku-5.5"
+    openai_model: str = "gpt-4o-mini"  # OpenAI model for understanding commands
+    router_model: str = "claude-haiku-5-5"  # Claude model for understanding commands
+    local_model: str = "qwen2.5:3b"  # Ollama model (offline, or online when chosen)
+    ollama_url: str = "http://127.0.0.1:11434"
+    effort: Literal["low", "medium", "high"] = "low"
+    timeout_s: float = Field(default=8.0, gt=0)
+    model: str = "claude-opus-5-5"  # planner / agent model for later phases
 
 
 class TTSSettings(BaseModel):

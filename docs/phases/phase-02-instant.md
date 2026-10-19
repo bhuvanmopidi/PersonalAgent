@@ -128,3 +128,5 @@ uv run jarvis apps --refresh     # rebuild the app index
 - Brightness fails on external monitors without DDC/CI; this is reported clearly.
 - Commands that don't match say "I can't do that yet"; the AI planner takes over in Phases 7, 11 and 14.
 - Next is Phase 3: Piper TTS so Jarvis speaks while it acts.
+
+**Fuzzy matching (Phase 7 fix):** a fuzzy app/site match must look like the whole query (typos like "spotfy", short names like "chrome"); a sentence that merely contains a name ("mr beast channel in youtube") matches nothing, and with an LLM available the sentence goes to the LLM instead.

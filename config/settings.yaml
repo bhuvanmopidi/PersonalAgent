@@ -7,6 +7,7 @@ hotkeys:
   push_to_talk: "<ctrl>+<alt>+j"    # talk without the wake word; "" disables
 
 router:
+  mode: hybrid                      # hybrid: rules → LLM · llm_first: LLM → rules (experiment)
   embedding_match_threshold: 0.85   # Tier-2 skill match (Phase 14)
   classifier_threshold: 0.8         # small classifier confidence (Phase 14)
 
@@ -38,6 +39,14 @@ browser:
   cdp_port: 9222                    # local remote-control port (127.0.0.1 only)
   launch_timeout_s: 15
 
-llm:
-  provider: anthropic               # swappable: anthropic | ollama (Phase 7)
-  model: claude-opus-5-5
+llm:                                # understands what the rules don't (Phase 7)
+  enabled: true
+  online_provider: openrouter       # openrouter | openai | claude | local — offline it's always local
+  openrouter_model: anthropic/claude-haiku-5.5   # chosen by benchmark; free alt: nvidia/nemotron-3-super-120b-a12b:free
+  openai_model: gpt-4o-mini         # needs OPENAI_API_KEY (+ credits) — optional
+  router_model: claude-haiku-5-5    # Claude (needs ANTHROPIC_API_KEY + credits) — optional
+  local_model: qwen2.5:3b           # Ollama: `ollama pull qwen2.5:3b`
+  ollama_url: http://127.0.0.1:11434
+  effort: low
+  timeout_s: 8
+  model: claude-opus-5-5            # planner / agent model (later phases)

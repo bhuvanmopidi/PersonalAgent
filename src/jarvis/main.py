@@ -1,4 +1,4 @@
-"""CLI entry: jarvis run | listen-test | do | repl | say | voices | apps | browser | demo-safety."""
+"""Command line: `jarvis --help` lists every command."""
 
 from __future__ import annotations
 
@@ -16,13 +16,22 @@ if TYPE_CHECKING:  # heavy modules are imported lazily so `jarvis --version` sta
 log = get_logger("jarvis")
 
 
+def _load_dotenv() -> None:
+    """Secrets (ANTHROPIC_API_KEY) from the project's .env — gitignored, never logged."""
+    from dotenv import load_dotenv
+
+    from jarvis.config import PROJECT_ROOT
+
+    load_dotenv(PROJECT_ROOT / ".env", override=False)
+
+
 async def run(verbose: bool, mute: bool) -> None:
     """Voice mode: wake word / push-to-talk → command → action, mic live during tasks."""
     from jarvis.voice.runtime import run_voice
 
     settings = load_settings()
     setup_logging("INFO" if verbose else "WARNING")
-    log.info("Jarvis %s starting (llm=%s)", __version__, settings.llm.provider)
+    log.info("Jarvis %s starting (llm online=%s)", __version__, settings.llm.online_provider)
     await run_voice(settings, mute=mute)
 
 
@@ -44,10 +53,10 @@ async def demo_safety() -> None:
 
 def _print_outcome(outcome: Outcome) -> None:
     r = outcome.result
-    label = outcome.intent.name if outcome.intent else "no match"
+    label = outcome.intent.name if outcome.intent else ("reply" if outcome.reply else "no match")
     status = "ok" if r.ok else f"FAILED ({r.error})"
-    print(f"  [{label}] {status}: {r.observation}")
-    print(f"  route {outcome.route_ms:.1f} ms · action {r.duration_ms:.0f} ms")
+    print(f"  [{label} via {outcome.route}] {status}: {r.observation}")
+    print(f"  understand {outcome.route_ms:.1f} ms · action {r.duration_ms:.0f} ms")
 
 
 async def do(text: str, verbose: bool, mute: bool) -> bool:
@@ -193,7 +202,120 @@ def apps(query: str | None, refresh: bool) -> None:
         print(f"\n{len(index.entries)} apps")
 
 
+async def llm_status() -> None:
+    import os
+
+    from jarvis.planner.connectivity import tcp_reachable
+
+    settings = load_settings()
+    s = settings.llm
+    online = await asyncio.to_thread(tcp_reachable)
+    router_key = os.environ.get("OPENROUTER_API_KEY", "")
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    claude_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    rows = [
+        ("Internet", "online" if online else "OFFLINE"),
+        (
+            "OpenRouter key",
+            f"found ({router_key[:10]}…)"
+            if router_key
+            else "MISSING: add OPENROUTER_API_KEY to .env",
+        ),
+        ("OpenRouter model", s.openrouter_model),
+        (
+            "OpenAI key",
+            f"found ({openai_key[:8]}…)" if openai_key else "not set (optional)",
+        ),
+        ("OpenAI model", s.openai_model),
+        ("Claude key", f"found ({claude_key[:10]}…)" if claude_key else "not set (optional)"),
+        ("Claude model", s.router_model),
+    ]
+    try:
+        import ollama
+
+        listed = await ollama.AsyncClient(host=s.ollama_url, timeout=3).list()
+        names = sorted(m.model or "" for m in listed.models)
+        ready = s.local_model in names or f"{s.local_model}:latest" in names
+        rows.append(("Ollama", f"running, models: {', '.join(names) or 'none'}"))
+        fix = f"NOT PULLED: run `ollama pull {s.local_model}`"
+        rows.append(("Local model", f"{s.local_model}: {'ready' if ready else fix}"))
+    except Exception as exc:
+        rows.append(
+            ("Ollama", f"NOT AVAILABLE ({type(exc).__name__}): winget install Ollama.Ollama")
+        )
+    first = {"openrouter": "OpenRouter", "openai": "OpenAI", "claude": "Claude",
+             "local": "the local model"}[s.online_provider]  # fmt: skip
+    rows.append(("Routing", f"rules, then {first} when online; the local model when offline"))
+    rows.append(("Mode", settings.router.mode))
+    for name, value in rows:
+        print(f"{name + ':':24}{value}")
+
+
+async def llm_ask(text: str, provider: str | None, repeat: int = 1) -> None:
+    """Show what a model decides for one sentence — nothing is executed."""
+    from typing import cast
+
+    from jarvis.agent import build_llm_router
+    from jarvis.planner.router import ProviderName
+    from jarvis.router.regex_router import RegexRouter
+
+    settings = load_settings()
+    setup_logging("WARNING")
+    router = build_llm_router(settings, RegexRouter.from_yaml())
+    names = [provider] if provider else list(router.providers)
+    for name in names:
+        single = build_llm_router(settings, RegexRouter.from_yaml())
+        single.providers = {name: router.providers[name]}
+        single.online_provider = cast(ProviderName, name)
+        for _ in range(repeat):  # same connection each time: shows cold vs warm and the cache
+            routed = await single.route(text)
+            if routed.decision is None:
+                print(f"{name:10} ✗ {routed.error}  ({routed.ms:.0f} ms)")
+                break
+            d = routed.decision
+            what = f"{d.intent} {d.slot_dict()}" if d.kind == "run_intent" else repr(d.text)
+            u = routed.usage
+            tokens = f"in {u.input_tokens} (cached {u.cache_read_tokens}) out {u.output_tokens}"
+            print(f"{name:10} {d.kind}: {what}  ({routed.ms:.0f} ms · {tokens})")
+
+
+async def eval_router(
+    providers: str,
+    local_models: str,
+    limit: int | None,
+    per_tag: int | None,
+    openrouter_models: str = "",
+) -> None:
+    from jarvis.planner.evaluate import load_cases, report, run_eval, sample_per_tag, save_report
+
+    settings = load_settings()
+    setup_logging("WARNING")
+    cases = load_cases()
+    if per_tag:
+        cases = sample_per_tag(cases, per_tag)
+    if limit:
+        cases = cases[:limit]
+    targets: list[str] = []
+    for p in (x.strip() for x in providers.split(",") if x.strip()):
+        if p == "local":
+            models = [m.strip() for m in local_models.split(",") if m.strip()]
+            targets += [f"local:{m}" for m in models or [settings.llm.local_model]]
+        elif p == "openrouter" and openrouter_models.strip():
+            targets += [
+                f"openrouter:{m.strip()}" for m in openrouter_models.split(",") if m.strip()
+            ]
+        else:
+            targets.append(p)
+    print(f"{len(cases)} cases · targets: {', '.join(targets)}")
+    results = await run_eval(settings, targets, cases)
+    text = report(results, cases)
+    print()
+    print(text)
+    print(f"Saved: {save_report(text)}")
+
+
 def cli(argv: list[str] | None = None) -> None:
+    _load_dotenv()
     parser = argparse.ArgumentParser(prog="jarvis", description="Voice PC agent for Windows")
     parser.add_argument("--version", action="version", version=f"jarvis {__version__}")
     sub = parser.add_subparsers(dest="command")
@@ -222,6 +344,23 @@ def cli(argv: list[str] | None = None) -> None:
     p_apps.add_argument("--refresh", action="store_true", help="rebuild the app index")
     p_browser = sub.add_parser("browser", help="the Jarvis Chrome window: setup (sign in) | status")
     p_browser.add_argument("action", choices=["setup", "status"])
+    p_llm = sub.add_parser("llm", help='language model: status | ask "sentence"')
+    p_llm.add_argument("action", choices=["status", "ask"])
+    p_llm.add_argument("text", nargs="*")
+    p_llm.add_argument("--provider", choices=["openrouter", "openai", "claude", "local"])
+    p_llm.add_argument("--repeat", type=int, default=1, help="ask N times on one connection")
+    p_eval = sub.add_parser("eval-router", help="benchmark rules vs Claude vs local model")
+    p_eval.add_argument(
+        "--providers", default="rules,local", help="rules,openrouter,openai,claude,local"
+    )
+    p_eval.add_argument("--local-models", default="", help="e.g. qwen2.5:3b,llama3.2:3b")
+    p_eval.add_argument(
+        "--openrouter-models", default="", help="e.g. anthropic/claude-haiku-5.5,openai/gpt-4o-mini"
+    )
+    p_eval.add_argument("--limit", type=int, help="only the first N cases")
+    p_eval.add_argument(
+        "--per-tag", type=int, help="only N cases from each category (fits free-model daily limits)"
+    )
     sub.add_parser("demo-safety", help="run fake actions through the safety layer")
     args = parser.parse_args(argv)
 
@@ -245,6 +384,17 @@ def cli(argv: list[str] | None = None) -> None:
         apps(args.query, args.refresh)
     elif args.command == "browser":
         browser(args.action)
+    elif args.command == "llm":
+        if args.action == "status":
+            asyncio.run(llm_status())
+        else:
+            asyncio.run(llm_ask(" ".join(args.text), args.provider, args.repeat))
+    elif args.command == "eval-router":
+        asyncio.run(
+            eval_router(
+                args.providers, args.local_models, args.limit, args.per_tag, args.openrouter_models
+            )
+        )
     elif args.command == "demo-safety":
         asyncio.run(demo_safety())
     else:

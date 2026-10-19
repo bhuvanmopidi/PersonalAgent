@@ -6,7 +6,8 @@ from jarvis.config import DEFAULT_SETTINGS_PATH, Settings, load_settings
 def test_loads_repo_settings() -> None:
     settings = load_settings(DEFAULT_SETTINGS_PATH)
     assert settings.hotkeys.kill == "esc"
-    assert settings.llm.provider == "anthropic"
+    assert settings.llm.router_model == "claude-haiku-5-5"
+    assert settings.router.mode == "hybrid"
 
 
 def test_missing_file_gives_defaults(tmp_path: Path) -> None:

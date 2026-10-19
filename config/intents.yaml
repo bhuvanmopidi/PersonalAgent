@@ -8,6 +8,8 @@
 intents:
   # ---- media / web ----
   - name: youtube_play
+    examples: ["play lofi on youtube", "put on some arijit singh songs", "play mr beast"]
+    slots: {"query": "what to search on YouTube, in the user's words"}
     description: "Playing {query} on YouTube"
     patterns:
       - '(?:play|put on|watch)(?: me)?(?: (?:a|an|some))? (?P<query>.+?) (?:on|in|from) (?:youtube|yt)'
@@ -15,6 +17,8 @@ intents:
     action: { kind: youtube_play, target: '{query}' }
 
   - name: youtube_search
+    examples: ["search lofi on youtube", "find cooking videos on youtube", "open mr beast channel on youtube"]
+    slots: {"query": "search words"}
     description: "Searching YouTube for {query}"
     patterns:
       - '(?:search(?: for)?|find|look up) (?P<query>.+?) on youtube'
@@ -22,6 +26,8 @@ intents:
     action: { kind: open_url, target: 'https://www.youtube.com/results?search_query={query|url}' }
 
   - name: web_search
+    examples: ["google weather in hyderabad", "search the web for cheap flights"]
+    slots: {"query": "search words"}
     description: "Searching the web for {query}"
     patterns:
       - 'google (?P<query>.+)'
@@ -31,6 +37,8 @@ intents:
 
   # ---- volume ----
   - name: volume_up
+    examples: ["volume up", "make it louder", "turn it up by 20"]
+    slots: {"value": "percent to change by, digits (default 10)"}
     speak: result          # say the new level, e.g. "Volume 60%"
     description: "Volume up"
     defaults: { value: "10" }
@@ -41,6 +49,8 @@ intents:
     action: { kind: set_volume, target: speakers, args: { mode: up, value: '{value}' } }
 
   - name: volume_down
+    examples: ["volume down", "it's too loud", "lower the volume by 5"]
+    slots: {"value": "percent to change by, digits (default 10)"}
     speak: result          # say the new level, e.g. "Volume 60%"
     description: "Volume down"
     defaults: { value: "10" }
@@ -51,23 +61,29 @@ intents:
     action: { kind: set_volume, target: speakers, args: { mode: down, value: '{value}' } }
 
   - name: volume_set
+    examples: ["volume 30", "set the volume to half"]
+    slots: {"value": "target percent 0-100, digits (half = 50, max = 100)"}
     description: "Volume {value}%"
     patterns:
       - '(?:set )?(?:the )?volume (?:to |at )?(?P<value>\d{1,3})(?: ?%| percent)?'
     action: { kind: set_volume, target: speakers, args: { mode: set, value: '{value}' } }
 
   - name: mute
+    examples: ["mute", "silence the sound"]
     description: "Muting"
     patterns: ['mute(?: (?:the )?(?:volume|sound|audio))?']
     action: { kind: set_volume, target: speakers, args: { mode: mute } }
 
   - name: unmute
+    examples: ["unmute", "turn the sound back on"]
     description: "Unmuting"
     patterns: ['unmute(?: (?:the )?(?:volume|sound|audio))?']
     action: { kind: set_volume, target: speakers, args: { mode: unmute } }
 
   # ---- brightness ----
   - name: brightness_up
+    examples: ["brightness up", "make the screen brighter"]
+    slots: {"value": "percent to change by, digits (default 10)"}
     speak: result          # say the new level, e.g. "Volume 60%"
     description: "Brightness up"
     defaults: { value: "10" }
@@ -78,6 +94,8 @@ intents:
     action: { kind: set_brightness, target: display, args: { mode: up, value: '{value}' } }
 
   - name: brightness_down
+    examples: ["dim the screen", "brightness down by 20"]
+    slots: {"value": "percent to change by, digits (default 10)"}
     speak: result          # say the new level, e.g. "Volume 60%"
     description: "Brightness down"
     defaults: { value: "10" }
@@ -88,6 +106,8 @@ intents:
     action: { kind: set_brightness, target: display, args: { mode: down, value: '{value}' } }
 
   - name: brightness_set
+    examples: ["brightness 50", "set brightness to max"]
+    slots: {"value": "target percent 0-100, digits"}
     description: "Brightness {value}%"
     patterns:
       - '(?:set )?(?:the )?brightness (?:to |at )?(?P<value>\d{1,3})(?: ?%| percent)?'
@@ -95,12 +115,16 @@ intents:
 
   # ---- files / folders ----
   - name: open_folder
+    examples: ["open downloads", "show my documents folder"]
+    slots: {"folder": "one of: downloads, documents, desktop, pictures, music, videos, home"}
     description: "Opening {folder}"
     patterns:
       - '(?:open|show|go to) (?:my |the )?(?P<folder>downloads|documents|desktop|pictures|photos|music|videos|home)(?: folder)?'
     action: { kind: open_folder, target: '{folder}' }
 
   - name: find_file
+    examples: ["find my resume", "where is the project report"]
+    slots: {"query": "words from the file name"}
     description: "Looking for {query}"
     patterns:
       - '(?:find|locate|where is|where''s) (?:the |my )?(?:file )?(?P<query>.+?)(?: file)?'
@@ -108,6 +132,7 @@ intents:
 
   # ---- system ----
   - name: lock
+    examples: ["lock the screen", "lock my pc"]
     description: "Locking the screen"
     patterns: ['lock(?: (?:the |my )?(?:screen|computer|pc|laptop|system))?']
     action: { kind: lock_screen, target: session }
@@ -116,6 +141,8 @@ intents:
   # seek/speed come FIRST: "skip 30 seconds" isn't next_video, "go back 1 minute" isn't go_back.
   # Units: s/sec/second(s), m/min/minute(s), h/hr/hour(s). Bare "fast forward"/"rewind" = 10 s.
   - name: media_forward
+    examples: ["fast forward by 10 min", "skip ahead 30 seconds", "fast forward"]
+    slots: {"amount": "digits", "unit": "seconds | minutes | hours"}
     description: "Skipping ahead"
     speak: result
     defaults: { amount: "10", unit: "seconds" }
@@ -126,6 +153,8 @@ intents:
     action: { kind: media_key, target: seek, args: { direction: forward, amount: '{amount}', unit: '{unit}' } }
 
   - name: media_rewind
+    examples: ["rewind 30 seconds", "go back a minute in the video"]
+    slots: {"amount": "digits", "unit": "seconds | minutes | hours"}
     description: "Going back"
     speak: result
     defaults: { amount: "10", unit: "seconds" }
@@ -135,14 +164,18 @@ intents:
     action: { kind: media_key, target: seek, args: { direction: back, amount: '{amount}', unit: '{unit}' } }
 
   - name: media_seek_to
+    examples: ["go to 5:30", "jump to 10 minutes"]
+    slots: {"time": "clock time like 5:30 or 1:02:03 (or use amount + unit)", "amount": "digits", "unit": "seconds | minutes | hours"}
     description: "Jumping"
     speak: result
+    optional: [time, amount, unit]   # either time, or amount + unit
     patterns:
       - '(?:go|jump|skip|seek|move) to (?P<time>\d+(?::\d{1,2}){1,2})'
       - '(?:go|jump|skip|seek|move) to (?P<amount>\d+) ?(?P<unit>s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)'
     action: { kind: media_key, target: seek_to, args: { time: '{time}', amount: '{amount}', unit: '{unit}' } }
 
   - name: media_restart
+    examples: ["start the video over", "play it from the beginning"]
     description: "From the beginning"
     speak: none
     patterns:
@@ -150,6 +183,8 @@ intents:
     action: { kind: media_key, target: restart }
 
   - name: media_speed
+    examples: ["speed 1.5x", "play at double speed"]
+    slots: {"rate": "playback rate 0.25-2, e.g. 1.5 (double = 2)"}
     description: "Speed"
     speak: result
     patterns:
@@ -158,30 +193,35 @@ intents:
     action: { kind: media_key, target: speed, args: { rate: '{rate}' } }
 
   - name: media_faster
+    examples: ["play faster", "speed it up"]
     description: "Faster"
     speak: result
     patterns: ['(?:play )?faster', 'speed (?:it |the video )?up']
     action: { kind: media_key, target: speed, args: { step: "0.25" } }
 
   - name: media_slower
+    examples: ["slow down", "play slower"]
     description: "Slower"
     speak: result
     patterns: ['(?:play )?slower', 'slow (?:it |the video )?down']
     action: { kind: media_key, target: speed, args: { step: "-0.25" } }
 
   - name: media_normal_speed
+    examples: ["normal speed"]
     description: "Normal speed"
     speak: result
     patterns: ['(?:back to |reset (?:the )?)?normal speed', 'reset (?:the )?speed']
     action: { kind: media_key, target: speed, args: { rate: "1" } }
 
   - name: media_pause
+    examples: ["pause", "stop the video for a sec"]
     description: "Pausing"
     speak: none
     patterns: ['(?:pause|stop playing)(?: (?:the |this )?(?:video|music|song|youtube))?(?: please)?']
     action: { kind: media_key, target: pause }
 
   - name: media_resume
+    examples: ["resume", "continue playing"]
     description: "Resuming"
     speak: none
     patterns:
@@ -190,16 +230,19 @@ intents:
     action: { kind: media_key, target: resume }
 
   - name: skip_ad
+    examples: ["skip the ad"]
     description: "Skipping the ad"
     patterns: ['skip (?:the |this )?ads?']
     action: { kind: media_key, target: skip_ad }
 
   - name: next_video
+    examples: ["next video", "play the next one"]
     description: "Next video"
     patterns: ['(?:next|skip)(?: (?:the |this )?(?:video|song|track))?', 'play the next (?:video|song)']
     action: { kind: media_key, target: next }
 
   - name: fullscreen
+    examples: ["full screen", "make the video bigger"]
     description: "Full screen"
     speak: none
     patterns: ['(?:go |make (?:it|the video) |exit |leave )?full ?screen(?: mode)?']
@@ -209,12 +252,15 @@ intents:
   # intents so "play", "play it again", "play the next video" keep their meaning; "… on spotify"
   # is left unmatched rather than played on YouTube by mistake.
   - name: play_default
+    llm: false
     description: "Playing {query} on YouTube"
     patterns:
       - '(?:play|put on)(?: me)?(?: (?:a|an|some))? (?!.* on spotify$)(?P<query>.+)'
     action: { kind: youtube_play, target: '{query}' }
 
   - name: ad_policy
+    examples: ["always skip ads", "never skip ads", "ask me about ads"]
+    slots: {"mode": "always | never | ask"}
     speak: result
     description: "Ad setting"
     patterns:
@@ -223,42 +269,87 @@ intents:
     action: { kind: set_ad_policy, target: '{mode}' }
 
   - name: go_back
+    examples: ["go back", "previous page"]
     description: "Going back"
     speak: none
     patterns: ['(?:go )?back(?: a page)?', 'previous page']
     action: { kind: browser_nav, target: back }
 
   - name: go_forward
+    examples: ["go forward"]
     description: "Going forward"
     speak: none
     patterns: ['(?:go )?forward(?: a page)?']
     action: { kind: browser_nav, target: forward }
 
   - name: reload
+    examples: ["refresh the page"]
     description: "Reloading"
     speak: none
     patterns: ['(?:reload|refresh)(?: (?:the |this )?page)?']
     action: { kind: browser_nav, target: reload }
 
   - name: new_tab
+    examples: ["open a new tab"]
     description: "New tab"
     speak: none
     patterns: ['(?:open )?(?:a )?new tab']
     action: { kind: browser_nav, target: new_tab }
 
   - name: close_tab
+    examples: ["close this tab"]
     description: "Closing the tab"
     speak: none
     patterns: ['close (?:the |this )?(?:current )?tab']
     action: { kind: browser_nav, target: close_tab }
 
+  # ---- which model understands what the rules miss (Phase 7) ----
+  - name: use_openrouter
+    examples: ["use openrouter", "use the free model"]
+    description: "Using OpenRouter"
+    speak: result
+    patterns: ['(?:use|switch to|change to) (?:the )?(?:open ?router|free(?: cloud)? model)']
+    action: { kind: set_llm_provider, target: openrouter }
+
+  - name: use_openai
+    examples: ["use openai", "switch to chatgpt"]
+    description: "Using OpenAI"
+    speak: result
+    patterns: ['(?:use|switch to|change to) (?:the )?(?:open ?ai|chat ?gpt|gpt)(?: model)?']
+    action: { kind: set_llm_provider, target: openai }
+
+  - name: use_claude
+    examples: ["use claude", "switch to claude"]
+    description: "Using Claude"
+    speak: result
+    patterns: ['(?:use|switch to|change to) (?:the )?claude(?: model)?']
+    action: { kind: set_llm_provider, target: claude }
+
+  - name: use_local_model
+    examples: ["use the local model", "switch to offline mode"]
+    description: "Using the local model"
+    speak: result
+    patterns: ['(?:use|switch to|change to) (?:the )?(?:local|offline)(?: model| mode| brain)?']
+    action: { kind: set_llm_provider, target: local }
+
+  - name: llm_status
+    examples: ["which model are you using", "are you online"]
+    description: "Model status"
+    speak: result
+    patterns: ['(?:which|what) (?:model|brain|ai) (?:are you using|is this)', 'are you (?:online|offline)']
+    action: { kind: llm_status, target: router }
+
   # ---- apps (generic — keep last) ----
   - name: close_app
+    examples: ["close notepad", "quit spotify"]
+    slots: {"app": "app name"}
     description: "Closing {app}"
     patterns: ['(?:close|quit|exit|kill) (?:the |my )?(?P<app>.+?)(?: app)?']
     action: { kind: close_app, target: '{app}' }
 
   - name: open_app
+    examples: ["open spotify", "open instagram website", "launch vs code", "go to github.com"]
+    slots: {"app": "app or website name, or a domain like github.com", "prefer": "app | website | auto (auto unless the user said 'app' or 'website')"}
     description: "Opening {app}"
     # "open up me the instagram website" → app=instagram, prefer=website ("app"/"website" kept as a hint)
     patterns:

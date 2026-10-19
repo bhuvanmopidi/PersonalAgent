@@ -9,6 +9,9 @@ uv sync
 uv run jarvis voices download     # Piper voice, ~60 MB (optional: falls back to Windows SAPI)
 uv run playwright install chromium # test browser for the browser tests (~120 MB)
 uv run jarvis browser setup        # sign in inside the Jarvis Chrome window (separate from your Chrome)
+# LLM (Phase 7): OPENROUTER_API_KEY=... (optionally OPENAI_/ANTHROPIC_API_KEY) in .env (gitignored);
+# local model: winget install Ollama.Ollama,
+# then: ollama pull qwen2.5:3b
 # Whisper small.en (~480 MB) downloads on the first `jarvis run` / `listen-test`.
 # GPU: needs an NVIDIA driver; cuBLAS comes from the nvidia-cublas-cu12 package. No GPU → CPU base.en.
 ```
@@ -29,6 +32,9 @@ In VS Code, set the interpreter to `.venv\Scripts\python.exe` (Ctrl+Shift+P → 
 | `uv run jarvis apps [name] [--refresh]` | List apps / see what a name resolves to / rebuild the index |
 | `uv run jarvis browser setup` | Open the Jarvis Chrome window (no remote control) to sign in once |
 | `uv run jarvis browser status` | Chrome found? Jarvis Chrome running? Control port connected? |
+| `uv run jarvis llm status` | Online? Claude key? Ollama running, model pulled? Routing order |
+| `uv run jarvis llm ask "…" [--provider openrouter\|openai\|claude\|local]` | What each model decides (nothing runs) |
+| `uv run jarvis eval-router [--providers rules,openrouter,openai,claude,local] [--local-models a,b] [--per-tag N] [--limit N]` | Router benchmark → `evals/results/router-<date>.md` (cloud runs cost about a cent) |
 | `uv run jarvis demo-safety` | Run fake actions through the safety layer |
 | `uv run pytest` | Run the unit tests (no side effects) |
 | `uv run pytest -m desktop` | Real-desktop smoke tests (Notepad, volume, voice pipeline, real Chrome + YouTube) |
@@ -49,16 +55,18 @@ src/jarvis/
   agent.py         Agent.handle(text): router → mapper → ActionRunner → executor
   paths.py         %LOCALAPPDATA%\JarvisAgent locations
   safety/          policy, confirm, killswitch, redact, captcha, demo
-  router/          regex_router.py (Tier-1 intents)
-  executors/       base.py (ActionRunner), router.py (KindRouter), os_executor.py,
+  router/          regex_router.py (Tier-1 intents), context.py, log.py (routes.jsonl)
+  planner/         schema, catalog (from intents.yaml), llm (OpenAI, Claude, Ollama), router, connectivity,
+                   evaluate (benchmark)
+  executors/       base.py (ActionRunner), router.py (KindRouter), os_executor.py, llm_control.py,
                    browser_session.py (Jarvis Chrome over CDP), browser.py (BrowserExecutor)
   apps/            youtube_flow.py
   tiers/instant/   app_index, apps, system, files, mapper
   voice/           tts (Piper, SAPI), audio (output), speaker, voices (download)
   telemetry/       logging, metrics
-  planner/ tiers/{skills,structured,vision}/ memory/   (later phases)
+  tiers/{skills,structured,vision}/ memory/   (later phases)
 docs/              this documentation
-evals/             eval tasks (Phase 16 runner)
+evals/             eval tasks; router_cases.yaml + results/ (router benchmark)
 tests/             pytest suite (conftest.py has shared fixtures)
 ```
 
