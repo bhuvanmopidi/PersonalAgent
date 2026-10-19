@@ -21,6 +21,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 import psutil
@@ -38,12 +39,23 @@ T = TypeVar("T")
 
 DESKTOP_KINDS = frozenset(
     {"click", "double_click", "type_text", "press_key", "select_option", "scroll", "find", "wait",
-     "launch_app", "switch_window", "go_back", "check_file"}
+     "launch_app", "switch_window", "go_back", "check_file", "attach_file", "open_file",
+     "wait_download"}
 )  # fmt: skip
+OPEN_DIALOG_WAIT_S = 6.0  # an app's Open dialog may take a moment to appear
 WINDOW_WAIT_S = 10.0  # how long a just-launched app may take to show its window
 SETTLE_QUIET_S = 0.2
 SETTLE_LIMIT_S = 2.0
 EMPTY_RETRY_S = 1.5  # an open window showing no controls yet gets another look
+CONTENT_MIN_NODES = 20  # fewer visible nodes than this = only the frame / title bar so far
+_CHROME = ("minimize", "maximize", "restore", "close")
+
+
+def _only_chrome(snap: Snapshot) -> bool:
+    """Nothing but the window's own Minimize / Maximize / Close (its content isn't drawn yet)."""
+    return all(e.name.lower().startswith(_CHROME) for e in snap.elements)
+
+
 _FOLDERS = ("Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos")
 _SKIP_PROCESSES = {"textinputhost", "searchhost", "startmenuexperiencehost", "shellexperiencehost",
                    "lockapp"}  # fmt: skip
@@ -279,7 +291,7 @@ class DesktopSession:
                     read_window, None, others, max_elements, max_text
                 )
             # an open window with nothing in it is still drawing (a dialog opening): look again
-            if window is None or snap.elements or time.monotonic() >= deadline:
+            if window is None or not _only_chrome(snap) or time.monotonic() >= deadline:
                 break
             await asyncio.sleep(0.25)
         self.controls = controls
@@ -294,6 +306,14 @@ class DesktopSession:
             found = {name: known_folder(name.lower()) for name in _FOLDERS}
             self._folders = {name: str(p) for name, p in found.items() if p is not None}
         return self._folders
+
+    async def wait_for_content(self, limit_s: float = 8.0) -> None:
+        """A just-launched app shows its window before its content (Store apps especially):
+        wait until there is more than window chrome, then until it settles."""
+        deadline = time.monotonic() + limit_s
+        while time.monotonic() < deadline and 0 <= await self.size() < CONTENT_MIN_NODES:
+            await asyncio.sleep(0.25)
+        await self.settle()
 
     async def size(self) -> int:
         """A cheap "did anything appear or go away?" number for the working window."""
@@ -424,6 +444,8 @@ class DesktopExecutor:
         self.session = session
         self.launcher = launcher
         self._keyboard = keyboard
+        self.downloads_dir: Path | None = None  # None = the user's Downloads folder
+        self._last_step = time.time()
 
     @property
     def keyboard(self) -> Keyboard:
@@ -438,6 +460,16 @@ class DesktopExecutor:
             return await self._open_app(action.target)
         if kind == "check_file":
             return await asyncio.to_thread(check_file, action.target)
+        if kind == "open_file":
+            from jarvis.executors.files import open_file
+
+            return await open_file(action)
+        if kind == "wait_download":
+            from jarvis.executors.files import downloads_folder, wait_for_download
+
+            return await wait_for_download(
+                self.downloads_dir or downloads_folder(), self._last_step - 1
+            )
         if kind == "switch_window":
             window = await self.session.switch(action.target)
             if window is None:
@@ -447,6 +479,9 @@ class DesktopExecutor:
         if window is None:
             return fail("no_window", "No app window to work in — open or switch to one first")
         await self.session.uia.run(self.session._activate, window)
+        self._last_step = time.time()
+        if kind == "attach_file":
+            return await self._attach(action, what)
         # the agent waits for the window to settle before it looks again — no wait here
         no_element = a.get("element") is None
         if (
@@ -460,6 +495,57 @@ class DesktopExecutor:
             return fail("bad_element", f"{what} isn't on the screen any more — look again")
         return await self.session.uia.run(self._element_op, kind, ctrl, a, what)
 
+    async def _attach(self, action: Action, what: str) -> ActionResult:
+        """Like a person: click the app's Attach / Browse; in the Open dialog give the file's full
+        path and press Enter. With no control named, an Open dialog must already be showing."""
+        from jarvis.executors.files import attached, resolved
+
+        path, failure = resolved(action)
+        if failure is not None or path is None:
+            return failure or fail("no_file", "which file?")
+        window = self.session.window
+        element = action.args.get("element")
+        if element is not None:
+            ctrl = self.session.controls.get(int(element))
+            if ctrl is None:
+                return fail("bad_element", f"{what} isn't on the screen any more — look again")
+            await self.session.uia.run(_click, ctrl, ctrl.ControlTypeName)
+        deadline = time.monotonic() + OPEN_DIALOG_WAIT_S
+        box = None
+        while time.monotonic() < deadline and box is None:
+            box = await self.session.uia.run(_file_name_box, window)
+            if box is None:
+                await asyncio.sleep(0.25)
+        if box is None:
+            return fail("no_open_dialog", f"No Open dialog appeared after clicking {what}")
+        await self.session.uia.run(self._fill_path, box, str(path))
+        for _ in range(int(OPEN_DIALOG_WAIT_S / 0.25)):  # the dialog closes once it took the file
+            await asyncio.sleep(0.25)
+            if await self.session.uia.run(_file_name_box, window) is None:
+                return attached(path)
+        return fail("open_dialog_stuck", "The Open dialog is still showing — look at it again")
+
+    def _fill_path(self, box: Any, path: str) -> None:
+        """Put the path in the dialog's File name box, check it's there, press Enter. The text
+        lives in an edit INSIDE the File name combo box; set it directly (standard Windows
+        dialogs allow that), typing as the fallback."""
+        import uiautomation as auto
+
+        edit = box
+        if box.ControlTypeName == "ComboBoxControl":
+            edit = next((c for c, _ in auto.WalkControl(box, maxDepth=2)
+                         if c.ControlTypeName == "EditControl"), box)  # fmt: skip
+        value = edit.GetPattern(auto.PatternId.ValuePattern)
+        if value is not None:
+            with contextlib.suppress(Exception):
+                value.SetValue(path)
+        if value is None or (value.Value or "") != path:
+            edit.SetFocus()
+            self.keyboard.press("Ctrl+A")
+            self.keyboard.type(path)
+        edit.SetFocus()
+        self.keyboard.press("Enter")
+
     async def _open_app(self, name: str) -> ActionResult:
         running = await self.session.switch(name)
         if running is not None:
@@ -472,7 +558,7 @@ class DesktopExecutor:
         window = await self.session.wait_for_app(name, before, plan)
         if window is None:
             return fail("no_window", f"{plan.display} started, but its window didn't appear")
-        await self.session.settle()
+        await self.session.wait_for_content()
         return ok(f'Opened "{window.title}"')
 
     async def _window_op(self, action: Action) -> ActionResult:
@@ -566,6 +652,27 @@ def check_file(path_text: str) -> ActionResult:
     elsewhere = [p for p in find_files(path.stem, search_roots(), limit=5) if p.stem == path.stem]
     hint = f"; a file with that name is at: {', '.join(map(str, elsewhere))}" if elsewhere else ""
     return fail("no_file", f"{path} is not there{hint}")
+
+
+def _file_name_box(window: Window | None) -> Any:
+    """The "File name" box of an Open / Save dialog showing for this window, if any."""
+    import uiautomation as auto
+
+    from jarvis.tiers.structured.desktop_observer import _dialogs
+
+    if window is None:
+        return None
+    try:
+        root = window_root(window)
+        for dialog in _dialogs(window, root):
+            for ctrl, _ in auto.WalkControl(dialog, maxDepth=12):
+                if ctrl.ControlTypeName in ("EditControl", "ComboBoxControl") and (
+                    "file name" in (ctrl.Name or "").lower()
+                ):
+                    return ctrl
+    except Exception:  # the dialog is closing
+        return None
+    return None
 
 
 def _focus_is_password() -> bool:

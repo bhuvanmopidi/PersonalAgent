@@ -20,7 +20,7 @@
 | 7 | LLM layer: rules → Claude Haiku via OpenRouter / local model, benchmark | ✅ Done | [phase-07-llm.md](phases/phase-07-llm.md) |
 | 11 | **General browser agent** — any website, no site-specific code | ✅ Done | [phase-11-agent.md](phases/phase-11-agent.md) |
 | 11.2 | **General desktop agent** — any Windows app via UI Automation; Spotify is just a task | ✅ Done | [phase-11.2-desktop.md](phases/phase-11.2-desktop.md) |
-| 11.3 | Files in and out on any site/app (attach, upload) — completes "mail my resume" | ⏳ Next | — |
-| 11.4 | Checkout guard for any shop (order read-back before Pay) — completes "order from Amazon" | Planned | — |
+| 11.3 | **Files in and out** — attach / upload on any site or app, downloads, open files | ✅ Done | [phase-11.3-files.md](phases/phase-11.3-files.md) |
+| 11.4 | Checkout guard for any shop (order read-back before Pay) — completes "order from Amazon" | ⏳ Next | — |
 | 10 | Live dictation into any text box (Word, Notepad, Gmail, WhatsApp…) | Planned | — |
 | 12–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |

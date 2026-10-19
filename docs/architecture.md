@@ -137,7 +137,8 @@ and the benchmark: [phases/phase-07-llm.md](phases/phase-07-llm.md).
   SEE   wait for the page / window to settle → numbered controls (custom controls, what a popup
         or modal dialog covers is hidden and reported, off-screen items counted) + text
   THINK planner (Haiku via OpenRouter; browser or desktop instructions, same rules) → ≤5 actions
-  ACT   each action → ActionRunner → SafetyPolicy (labels, URL rules, password boxes, Windows-
+  ACT   each action → ActionRunner (annotate: page URL, the real file for attach / open) →
+        SafetyPolicy (labels, URL rules, password boxes, blocked files, programs, Windows-
         settings changes, risky keys, planner risk hint — raise-only) → KindRouter →
         BrowserExecutor or DesktopExecutor (by `args.surface`)
   CHECK something changed mid-batch → look again · done / ask / fail · loop = same actions on an
@@ -168,4 +169,5 @@ Details: [phases/phase-11-agent.md](phases/phase-11-agent.md) (websites),
 | LLM layer: rules → OpenRouter (Claude Haiku 5.5) / OpenAI / Claude / local model (Ollama), offline fallback, router benchmark | ✅ Phase 7 |
 | General browser agent: any website, See→Think→Act→Check, every step safety-checked, `jarvis eval-agent` | ✅ Phase 11 |
 | General desktop agent: the same loop in any Windows app via UI Automation (Spotify, Settings, File Explorer, Calculator…); Settings changes confirmed | ✅ Phase 11.2 |
-| Generic abilities: file upload anywhere (11.3), checkout guard for any shop (11.4), live dictation into any text box (10) — Spotify/Gmail/Amazon/Word are only eval tasks; then skills, memory | Planned |
+| Files in and out: attach / upload on any site or app, downloads, open files; secrets never attached | ✅ Phase 11.3 |
+| Generic abilities: checkout guard for any shop (11.4), live dictation into any text box (10) — Spotify/Gmail/Amazon/Word are only eval tasks; then skills, memory | Planned |

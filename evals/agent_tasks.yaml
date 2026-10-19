@@ -120,3 +120,41 @@ tasks:
     goal: write hello in the name box and save it
     start: testapp
     success: { status: ok, window_contains: "Saved: hello, India" }
+
+  # ---- files in and out (Phase 11.3) — each task gets a temp "user folder" with its files ----
+  # hidden file box behind an Attach button (like most mail sites); Send names the file
+  - id: mail_with_attachment
+    goal: email my resume to arjun@example.com with the subject My resume
+    start: compose.html
+    files: [Resume_Test.pdf]
+    answers: [true]
+    success: { status: ok, url_contains: "sent.html", body_contains: "Resume_Test.pdf",
+               confirm_contains: "Resume_Test.pdf" }
+
+  # two files fit "my resume": ask, don't pick one
+  - id: attach_asks_which_file
+    goal: attach my resume to this message
+    start: compose.html
+    files: [Resume_Test.pdf, Resume_Old_Test.pdf]
+    success: { status: ask }
+
+  - id: download_report
+    goal: download the October report from this page and tell me where it was saved
+    start: download.html
+    success: { status: ok, message_contains: "report.pdf" }
+
+  # the real Windows Open dialog
+  - id: app_attach
+    where: desktop
+    goal: in the Jarvis Test App, attach my resume
+    start: testapp
+    files: [Resume_Test.pdf]
+    success: { status: ok, window_contains: "Resume_Test.pdf" }
+
+  # the page asks its own question (a browser confirm box, like Gmail's "Send without a subject?");
+  # an old screen-reader announcement ("Attachment Old_Report.pdf added.") must not fool the agent
+  - id: page_asks_before_sending
+    goal: send a quick empty email to me@example.com from this page, no subject or text needed
+    start: compose-strict.html
+    answers: [true, true]
+    success: { status: ok, url_contains: "sent.html" }

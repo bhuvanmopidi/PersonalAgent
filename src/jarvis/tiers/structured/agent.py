@@ -45,14 +45,16 @@ _KIND = {
     "click": "click", "double_click": "double_click", "type": "type_text", "press": "press_key",
     "select": "select_option", "scroll": "scroll", "find": "find", "navigate": "navigate",
     "back": "go_back", "wait": "wait", "open_app": "launch_app", "switch": "switch_window",
-    "check_file": "check_file",
+    "check_file": "check_file", "attach": "attach_file", "wait_download": "wait_download",
+    "open_file": "open_file",
 }  # fmt: skip
+_FILE_OPS = {"attach", "wait_download", "open_file"}  # both surfaces: files in and out
 # what each surface can do (the planner is told; anything else is rejected before it runs)
 OPS: dict[SurfaceName, frozenset[str]] = {
     "browser": frozenset({"click", "double_click", "type", "press", "select", "scroll", "find",
-                          "navigate", "back", "wait"}),
+                          "navigate", "back", "wait", *_FILE_OPS}),
     "desktop": frozenset({"click", "double_click", "type", "press", "select", "scroll", "find",
-                          "back", "wait", "open_app", "switch", "check_file"}),
+                          "back", "wait", "open_app", "switch", "check_file", *_FILE_OPS}),
 }  # fmt: skip
 _SYSTEM: dict[SurfaceName, str] = {"browser": SYSTEM, "desktop": DESKTOP_SYSTEM}
 # controls whose click changes a value (a switch, a box, an option) — matters in Windows Settings
@@ -93,8 +95,12 @@ def describe(act: AgentAction, el: Element | None) -> str:
         return f"scroll {act.text or 'down'}"
     if act.op == "find":
         return f'find "{act.text or ""}"'
-    if act.op in ("open_app", "switch", "check_file"):
+    if act.op in ("open_app", "switch", "check_file", "open_file"):
         return f'{act.op.replace("_", " ")} "{act.text or ""}"'
+    if act.op == "attach":
+        return f'attach "{act.text or ""}"' + (f" with {target}" if target else "")
+    if act.op == "wait_download":
+        return "wait for the download"
     return f"{act.op.replace('_', ' ')} {target}".strip()
 
 
@@ -112,6 +118,62 @@ def tidy(message: str) -> str:
     return text.rstrip('}]"').rstrip() or message
 
 
+_ACTIVATING = {"enter", "return", "space", " "}
+
+
+def _activates(key: str) -> bool:
+    """Does this key press the focused control (Enter, Space, Ctrl+Enter …)?"""
+    return key.lower().replace(" ", "").split("+")[-1] in _ACTIVATING or key.strip() == " "
+
+
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_FILE_NAME = re.compile(
+    r"[\w ()\-.,']+\.(?:pdf|docx?|xlsx?|pptx?|csv|txt|jpe?g|png|gif|zip|rar|mp[34]|mov|wav)\b",
+    re.IGNORECASE,
+)
+_FIELD_TAGS = ("input", "textarea", "edit", "combo box", "select", "document")
+
+
+def _file_name(match: str) -> str:
+    """'gmail.com Mopidi_Resume 8.pdf' → 'Mopidi_Resume 8.pdf': the name is the words right before
+    the extension, back to the last word that is itself dotted (a domain, another file)."""
+    words = match.split()
+    keep = [words[-1]]
+    for word in reversed(words[:-1]):
+        if "." in word or "@" in word or ":" in word:
+            break
+        keep.insert(0, word)
+    return " ".join(keep).strip(" ,'")
+
+
+def _focused(snap: Snapshot) -> Element | None:
+    return next((e for e in snap.elements if e.focused), None)
+
+
+def read_back(snap: Snapshot, el: Element | None) -> str:
+    """For a Send / Submit question: what goes out — recipients, filled-in fields, attachments —
+    read from the form / dialog the button is in (one compose window, not another one)."""
+    group = el.group if el is not None else 0
+    in_group = [e for e in snap.elements if e.group == group] if group else snap.elements
+    fields = [f'{e.name}: "{e.value}"' for e in in_group
+              if e.value and not e.password and not e.otp and e.tag in _FIELD_TAGS]  # fmt: skip
+    parts = fields[:4]
+    if group and group in snap.groups:
+        text = snap.groups[group]
+        typed = " ".join(fields)
+        emails = [m for m in dict.fromkeys(_EMAIL.findall(text)) if m not in typed]
+        if emails:
+            parts.append("to " + ", ".join(emails[:5]))
+        files = list(dict.fromkeys(_file_name(m) for m in _FILE_NAME.findall(text)))
+        if files:
+            parts.append("attachments: " + ", ".join(files[:5]))
+        elif re.search(r"\battach", text, re.IGNORECASE) or any(
+            "attach" in e.name.lower() for e in in_group
+        ):
+            parts.append("no attachments")
+    return "; ".join(parts)
+
+
 def to_action(
     act: AgentAction, snap: Snapshot, surface: SurfaceName = "browser"
 ) -> tuple[Action | None, str | None]:
@@ -127,10 +189,14 @@ def to_action(
         return None, f"element [{act.element}] isn't on the page"
     if act.op in ("open_app", "switch", "check_file") and not (act.text or "").strip():
         return None, f"{act.op} needs the app or window name in text"
+    if act.op in ("attach", "open_file") and not (act.text or "").strip():
+        return None, f"{act.op} needs the file in text (a full path or a description)"
     if act.op == "navigate" and not (act.url or "").startswith(("http://", "https://")):
         return None, "navigate needs a full http(s) URL"
     if act.op in ("press", "type") and el is None:  # keys go to whatever is focused: judge that
         el = next((e for e in snap.elements if e.focused), None)
+    if act.op == "press" and el is not None and not _activates(act.key or "Enter"):
+        el = None  # Escape / Tab / arrows on a focused "Send" button don't send
 
     flags = set()
     if el is not None and el.password:
@@ -159,8 +225,10 @@ def to_action(
         args["surface"] = "desktop"  # routed to the desktop executor
     if act.op == "navigate":
         target = act.url or ""
-    elif act.op in ("open_app", "switch", "check_file"):
-        target = (act.text or "").strip()
+    elif act.op in ("open_app", "switch", "check_file", "attach", "open_file"):
+        target = (
+            act.text or ""
+        ).strip()  # attach / open: resolved to a real file before the policy
     else:
         target = el.name if el else ""
     if surface == "desktop":
@@ -207,6 +275,9 @@ class TaskAgent:
         seen: set[tuple[Any, ...]] = set()
         failures: dict[tuple[str, str, str], int] = {}  # same action, same reason → how often
         scrolls = 0  # scroll actions in a row
+        attached: list[str] = []  # files attached in this task — named in Send / Submit questions
+        confirmed_done: set[tuple[str, str]] = set()  # steps the user said yes to, that ran
+        heard: set[str] = set()  # page announcements already there — old news, not shown again
         usage = Usage()
         actions_done = 0
         trace = Trace(goal, self.trace_dir)
@@ -228,6 +299,11 @@ class TaskAgent:
                 return outcome(False, blocked.observation or "A human check needs you.",
                                blocked.error or "captcha", step)  # fmt: skip
             snap = await surface.observe(self.settings.max_elements, self.settings.max_text_chars)
+            # screen-reader announcements: only NEW ones ("Message sent" after our Send) — what a
+            # site announced before this task or in an earlier look is no evidence of anything
+            fresh = [a for a in snap.announcements if a not in heard] if step > 1 else []
+            heard.update(snap.announcements)
+            snap = snap.model_copy(update={"announcements": fresh})
             where_before = surface.location()
 
             try:
@@ -252,18 +328,45 @@ class TaskAgent:
                 watch = i < len(batch) - 1
                 before = await surface.size() if watch or act.op == "press" else 0
                 loc_before = surface.location()
+                if (action.kind, action.target) in confirmed_done:
+                    # a second Send / Submit / Pay would do it twice: never — say so instead
+                    why = (f"I already did that once in this task ({action.target}), so I won't "
+                           "do it again — please check whether it went through.")  # fmt: skip
+                    return outcome(False, why, "repeat_blocked", step)
+                if action.kind in ("click", "double_click", "press_key"):
+                    # if this turns out to be Send / Submit, the question says what goes with it
+                    shown = read_back(snap, snap.by_id(act.element) or _focused(snap))
+                    extra = [shown] if shown else []
+                    if attached and "attachments:" not in shown:
+                        extra.append(f"attached in this task: {', '.join(attached)}")
+                    if extra:
+                        action = action.model_copy(update={
+                            "description": f"{action.description} — {'; '.join(extra)}",
+                        })  # fmt: skip
                 result = await self.run_action(action)
+                if result.ok and result.data.get("confirmed"):
+                    confirmed_done.add((action.kind, action.target))
+                if result.ok and result.data.get("attached"):
+                    attached.append(Path(str(result.data["attached"])).name)
                 actions_done += 1
                 status = "ok" if result.ok else f"failed: {result.observation or result.error}"
+                if result.ok and result.data.get("asked"):  # what the user was asked, and said
+                    status = (
+                        f'{status} (you asked the user "{result.data["asked"]}" and they said yes)'
+                    )
                 if result.ok and act.op == "press":
                     await surface.settle()
                     if surface.location() == loc_before and await surface.size() == before:
                         # e.g. Escape on a notice that doesn't close that way: don't press it again
                         status = "ok, but nothing on the page changed"
-                if result.ok and act.op in ("find", "open_app", "switch", "check_file"):
+                if result.data.get(
+                    "page_notes"
+                ):  # the page's own question / notice, and the answer
+                    status = f"{status} ({result.data['page_notes']})"
+                if result.ok and act.op in ("find", "open_app", "switch", "check_file", *_FILE_OPS):
                     status = f"ok: {result.observation}"
                 history.append(f"{describe(act, snap.by_id(act.element))} → {status}")
-                trace.action(action, result)
+                trace.action(action, result, snap.by_id(act.element))
                 scrolls = scrolls + 1 if act.op == "scroll" else 0
                 if scrolls >= SCROLL_STOP:
                     why = "I scrolled through the page again and again without finding what I "
@@ -292,6 +395,7 @@ class TaskAgent:
                         break  # something appeared or went away: look before going on
 
             if plan.status == "done":
+                trace.evidence(snap)  # what the screen showed when it worked — for skills
                 return outcome(True, plan.message or "Done.", None, step)
             if plan.status == "ask":
                 return outcome(False, plan.message or "I need your help with that.", "ask", step)
@@ -381,9 +485,23 @@ class Trace:
                      "thought": redact(plan.thought), "status": plan.status,
                      "actions": [a.model_dump() for a in plan.actions]})  # fmt: skip
 
-    def action(self, action: Action, result: ActionResult) -> None:
+    def action(self, action: Action, result: ActionResult, element: Element | None = None) -> None:
+        """The control by what it is (type, name, value) — not only its number, which changes every
+        look: Phase 12 skills find it again by these."""
+        control = (
+            {"tag": element.tag, "role": element.role, "name": redact(element.name),
+             "value": "" if element.password else redact(element.value)}
+            if element is not None else None
+        )  # fmt: skip
+        args = {k: v for k, v in action.args.items() if k in ("text", "key", "direction", "path")}
         self._write({"event": "action", "kind": action.kind, "target": redact(action.target),
+                     "control": control, "args": {k: redact(str(v)) for k, v in args.items()},
                      "ok": result.ok, "error": result.error})  # fmt: skip
+
+    def evidence(self, snap: Snapshot) -> None:
+        """The screen at the moment the goal was reached (a skill checks for this on replay)."""
+        self._write({"event": "evidence", "url": snap.url, "title": redact(snap.title),
+                     "text": redact(snap.text[:300])})  # fmt: skip
 
     def finish(self, outcome: AgentOutcome) -> None:
         self._write({"event": "end", "ok": outcome.ok, "error": outcome.error,

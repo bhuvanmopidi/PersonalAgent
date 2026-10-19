@@ -63,13 +63,17 @@ class ActionRunner:
                 return ActionResult(ok=False, error="user_cancelled")
             return ActionResult(ok=True, observation="completed by user")
 
-        if check.decision == Decision.CONFIRM and not await self.confirmer.confirm(
-            build_confirm_prompt(action, check)
-        ):
+        confirmed = check.decision == Decision.CONFIRM
+        question = build_confirm_prompt(action, check) if confirmed else ""
+        if confirmed and not await self.confirmer.confirm(question):
             return ActionResult(ok=False, error="user_declined")
 
         try:
-            return await self.executor.execute(action)
+            result = await self.executor.execute(action)
         except Exception as exc:  # executor bugs become results, never crash the agent
             log.exception("executor failed for %s", action.kind)
             return ActionResult(ok=False, error=f"exception: {exc}")
+        if confirmed:  # the agent must never repeat a step the user said yes to (a 2nd Send…)
+            data = {**result.data, "confirmed": True, "asked": question}  # …and knows what was said
+            result = result.model_copy(update={"data": data})
+        return result

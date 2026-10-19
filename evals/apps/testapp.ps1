@@ -72,6 +72,16 @@ $prefs.Add_Click({
 })
 $form.Controls.Add($prefs)
 
+$attach = New-Object System.Windows.Forms.Button
+$attach.Text = "Attach file..."; $attach.Left = 510; $attach.Top = 172; $attach.Width = 110
+$attach.Add_Click({
+  # the standard Windows Open dialog, like any app's Attach / Browse
+  $open = New-Object System.Windows.Forms.OpenFileDialog
+  $open.Title = "Open"
+  if ($open.ShowDialog($form) -eq "OK") { $status.Text = "Attached: " + $open.FileName }
+})
+$form.Controls.Add($attach)
+
 Add-Label "Songs" 20 220 | Out-Null
 $songs = New-Object System.Windows.Forms.ListBox
 $songs.Left = 120; $songs.Top = 220; $songs.Width = 320; $songs.Height = 230

@@ -146,14 +146,17 @@ async def app() -> AsyncIterator[tuple[DesktopSession, str]]:
     proc = launch_test_app(title)
     session = DesktopSession()
     try:
-        for _ in range(80):
-            if await session.switch(title):
+        for _ in range(80):  # THIS test's window — not a look-alike left over from another run
+            window = await session.switch(title)
+            if window is not None and window.title == title:
                 break
+            session.window = None
             await asyncio.sleep(0.1)
         assert session.window is not None, "the test app didn't open"
         yield session, title
     finally:
         proc.kill()
+        proc.wait(timeout=5)
         session.close()
 
 
@@ -363,3 +366,24 @@ async def test_fields_and_buttons_come_first_when_space_is_short(
     names = {e.name for e in snap.elements}
     assert {"Your name", "Country", "Password", "Save", "Delete account", "Play"} <= names
     assert len(snap.elements) == 10 and snap.more_below
+
+
+@desktop
+async def test_attach_through_the_windows_open_dialog(
+    app: tuple[DesktopSession, str], tmp_path: Any
+) -> None:
+    from jarvis.executors.files import FileResolver
+
+    (tmp_path / "Resume_Bhuvan.pdf").write_bytes(b"%PDF-1.4 test")
+    session, _ = app
+    resolver = FileResolver([tmp_path])
+    executor = DesktopExecutor(session, NoLauncher())
+    runner = ActionRunner(
+        SafetyPolicy.from_yaml(), executor, ScriptedConfirmer(), resolver.annotate
+    )
+    snap = await session.observe(120, 1500)
+    op = AgentAction(op="attach", element=named(snap, "Attach file..."), text="my resume")
+    result = await act(runner, snap, op)
+    assert result.ok, result.observation
+    assert "Attached Resume_Bhuvan.pdf" in result.observation
+    assert str(tmp_path / "Resume_Bhuvan.pdf") in (await session.observe(120, 1500)).text

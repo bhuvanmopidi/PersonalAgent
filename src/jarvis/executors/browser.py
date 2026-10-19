@@ -11,9 +11,12 @@ a clear message; the default browser is used only when browser.enabled is false.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import os
+import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from jarvis.apps.media_time import fmt_clock, parse_clock, to_seconds
@@ -26,13 +29,13 @@ from jarvis.safety.policy import CaptchaRules
 from jarvis.telemetry.logging import get_logger
 
 if TYPE_CHECKING:
-    from playwright.async_api import Locator, Page
+    from playwright.async_api import Dialog, Download, Locator, Page
 
 log = get_logger(__name__)
 
 AGENT_KINDS = frozenset(
     {"click", "double_click", "type_text", "press_key", "select_option", "scroll", "find",
-     "navigate", "go_back", "wait"}
+     "navigate", "go_back", "wait", "attach_file", "open_file", "wait_download"}
 )  # fmt: skip
 BROWSER_KINDS = frozenset(
     {"open_url", "youtube_play", "media_key", "browser_nav", "set_ad_policy", *AGENT_KINDS}
@@ -175,7 +178,18 @@ class BrowserExecutor:
     ) -> None:
         self.session = session  # None = browser automation disabled in settings
         self.agent_page: Page | None = None  # the tab the general agent is working in
+        self.downloads_dir: Path | None = (
+            None  # None = the user's Downloads folder (evals: a temp one)
+        )
+        self.downloads: list[Path] = []  # files downloaded in the agent's tab, newest last
+        self._watched: set[int] = set()  # tabs whose downloads we save
+        self._reported = 0  # downloads already handed to the agent
+        self._saving = 0  # downloads still being written
+        self._last_step = time.time()  # when the agent's previous action started
         self.youtube = YouTubeFlow(youtube, asker, announce)
+        self._asker = asker  # the page's own questions (confirm / prompt boxes) go to the user
+        self._dialog_notes: list[str] = []  # what the page asked / said during the last step
+        self._dialogs_open = 0  # page questions waiting for the user's answer
         self.captcha = CaptchaGate(captcha, asker)
         self._open = opener
 
@@ -311,16 +325,89 @@ class BrowserExecutor:
         if page is None or page.is_closed():
             page = await pick_active(await self.session.pages()) or await self.session.new_page()
             self.agent_page = page
+        if id(page) not in self._watched:  # keep what this tab downloads, in the Downloads folder
+            self._watched.add(id(page))
+            page.on("download", self._on_download)
+            page.on("dialog", self._on_dialog)
         await page.bring_to_front()
         return page
 
+    def _on_dialog(self, dialog: Dialog) -> None:
+        self._dialogs_open += 1
+        asyncio.get_running_loop().create_task(self._answer_dialog(dialog))
+
+    async def _answer_dialog(self, dialog: Dialog) -> None:
+        """The page's own pop-up box (alert / confirm / prompt / "leave this page?"). Left alone,
+        the browser library answers Cancel — e.g. Gmail's "Send without a subject?" then silently
+        doesn't send. A notice is acknowledged; a question goes to the user."""
+        message = " ".join(dialog.message.split())[:200] or "(no text)"
+        try:
+            if dialog.type == "alert":
+                self._dialog_notes.append(f'the page said: "{message}"')
+                await dialog.accept()
+                return
+            question = f'The page asks: "{message}" — OK?'
+            if dialog.type == "beforeunload":
+                question = "The page warns you may lose changes if it closes or moves on — OK?"
+            yes = await self._asker.confirm(question)
+            self._dialog_notes.append(
+                f'the page asked "{message}" — the user said {"OK" if yes else "Cancel"}'
+            )
+            if yes:
+                await dialog.accept()
+            else:
+                await dialog.dismiss()
+        except Exception:  # the page moved on meanwhile
+            log.debug("page dialog went away before it was answered", exc_info=True)
+        finally:
+            self._dialogs_open -= 1
+
+    def _on_download(self, download: Download) -> None:
+        self._saving += 1
+        asyncio.get_running_loop().create_task(self._save_download(download))
+
+    async def _save_download(self, download: Download) -> None:
+        from jarvis.executors.files import downloads_folder
+
+        folder = self.downloads_dir or downloads_folder()
+        name = download.suggested_filename or "download"
+        target, n = folder / name, 1
+        while target.exists():  # like the browser: "report (1).pdf"
+            target = folder / f"{Path(name).stem} ({n}){Path(name).suffix}"
+            n += 1
+        try:
+            await download.save_as(target)
+            self.downloads.append(target)
+            log.info("download saved to %s", target)
+        except Exception:
+            log.warning("download %s couldn't be saved", name, exc_info=True)
+        finally:
+            self._saving -= 1
+
     async def _agent_op(self, action: Action) -> ActionResult:
+        """One agent step — plus what the page asked or said meanwhile (its own pop-up boxes)."""
+        self._dialog_notes = []
+        result = await self._agent_step(action)
+        deadline = time.monotonic() + 300  # the user may take a moment to answer the page
+        while self._dialogs_open and time.monotonic() < deadline:
+            await asyncio.sleep(0.1)
+        if self._dialog_notes:
+            notes = "; ".join(self._dialog_notes)
+            result = result.model_copy(update={
+                "observation": f"{result.observation} ({notes})",
+                "data": {**result.data, "page_notes": notes},
+            })  # fmt: skip
+        return result
+
+    async def _agent_step(self, action: Action) -> ActionResult:
         from playwright.async_api import Error as PlaywrightError
         from playwright.async_api import TimeoutError as PlaywrightTimeout
 
         from jarvis.tiers.structured.observer import locator_for
 
         page = await self.agent_tab()
+        if action.kind != "wait_download":
+            self._last_step = time.time()
         a = action.args
         element = a.get("element")
         loc = page.locator(locator_for(int(element))).first if element is not None else None
@@ -390,6 +477,27 @@ class BrowserExecutor:
                     return fail("not_found", f'"{words}" is not anywhere on this page')
                 more = f" ({found['count']} matches)" if found["count"] > 1 else ""
                 return ok(f'Found "{words}"{more} — scrolled to it: "{found["around"]}"')
+            if action.kind == "attach_file":
+                return await self._attach(page, loc, action, what)
+            if action.kind == "open_file":
+                from jarvis.executors.files import open_file
+
+                return await open_file(action, self._open)
+            if action.kind == "wait_download":
+                from jarvis.executors.files import downloads_folder, wait_for_download
+
+                folder = self.downloads_dir or downloads_folder()
+                deadline = time.monotonic() + 30
+                while time.monotonic() < deadline:  # what this tab downloaded (usually instant)
+                    fresh = [p for p in self.downloads[self._reported :] if p.is_file()]
+                    if fresh:
+                        self._reported = len(self.downloads)
+                        return await wait_for_download(folder, 0, known=[fresh[-1]])
+                    if not self._saving:
+                        break
+                    await asyncio.sleep(0.25)
+                # nothing from the tab (yet): a file arriving in the folder since the last step
+                return await wait_for_download(folder, self._last_step - 1)
             if action.kind == "navigate":
                 await page.goto(
                     action.target, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS
@@ -406,6 +514,42 @@ class BrowserExecutor:
         except PlaywrightTimeout as exc:
             return fail("element_not_ready", f"Couldn't {action.kind.replace('_', ' ')} {what}: "
                         f"{_why(exc)}. Look at the page again")  # fmt: skip
+
+    async def _attach(
+        self, page: Page, loc: Locator | None, action: Action, what: str
+    ) -> ActionResult:
+        """Like a person: click Attach / Upload and pick the file when the chooser opens — or put
+        it straight into the page's file box."""
+        from playwright.async_api import TimeoutError as PlaywrightTimeout
+
+        from jarvis.executors.files import attached, resolved
+
+        path, failure = resolved(action)
+        if failure is not None or path is None:
+            return failure or fail("no_file", "which file?")
+        if loc is not None and await loc.evaluate(
+            "e => e.tagName === 'INPUT' && e.type === 'file'"
+        ):
+            await loc.set_input_files(str(path))
+        elif loc is not None:
+            try:
+                async with page.expect_file_chooser(timeout=ELEMENT_TIMEOUT_MS) as chooser:
+                    await loc.click(timeout=ELEMENT_TIMEOUT_MS)
+                await (await chooser.value).set_files(str(path))
+            except PlaywrightTimeout:
+                if not await self._only_file_box(page, path):
+                    return fail("no_chooser", f"Clicking {what} didn't open a file picker")
+        elif not await self._only_file_box(page, path):
+            return fail("no_file_box", "There's no single upload box here — name the Attach button")
+        await _settle(page)
+        return attached(path)
+
+    async def _only_file_box(self, page: Page, path: Path) -> bool:
+        boxes = page.locator("input[type=file]")
+        if await boxes.count() != 1:
+            return False
+        await boxes.first.set_input_files(str(path))
+        return True
 
     async def _covered(self, loc: Locator, what: str) -> ActionResult | None:
         """Fail at once — with the reason — if something covers the element (no 3 s wait)."""

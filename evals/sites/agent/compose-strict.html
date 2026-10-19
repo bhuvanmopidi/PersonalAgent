@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><title>QuickMail - New message (strict)</title></head>
+<body>
+  <!-- like Gmail: a screen-reader announcement left over from earlier — NOT about this message -->
+  <div aria-live="polite" style="position:absolute;left:-9999px">Attachment Old_Report.pdf added.</div>
+  <h1>New message</h1>
+  <div role="dialog" aria-label="New message">
+    <label>To <input type="text" id="to" aria-label="To recipients"></label>
+    <label>Subject <input type="text" id="subject" aria-label="Subject"></label>
+    <p><button id="send">Send</button></p>
+  </div>
+<script>
+  // like Gmail: an empty subject gets the browser's own question box
+  document.getElementById("send").addEventListener("click", () => {
+    const subject = document.getElementById("subject").value;
+    if (!subject && !confirm("Send this message without a subject or text in the body?")) return;
+    location.href = "sent.html?" + new URLSearchParams({to: document.getElementById("to").value,
+                                                        subject, files: ""}).toString();
+  });
+</script>
+</body></html>

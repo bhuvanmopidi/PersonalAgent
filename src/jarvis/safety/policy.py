@@ -5,6 +5,7 @@ Every action passes through SafetyPolicy.check() via ActionRunner — there is n
 
 from __future__ import annotations
 
+import fnmatch
 import re
 from enum import StrEnum
 from pathlib import Path
@@ -74,6 +75,8 @@ class SafetyRules(BaseModel):
     captcha: CaptchaRules = CaptchaRules()
     payment_required_fields: list[str] = Field(default_factory=list)
     settings_apps: list[str] = Field(default_factory=list)  # value changes there → confirm
+    blocked_paths: list[str] = Field(default_factory=list)  # never attached / opened
+    program_extensions: list[str] = Field(default_factory=list)  # opening one → confirm
     risky_keys: RiskLists = RiskLists()  # key combos that act at once (send, delete for good)
 
 
@@ -173,6 +176,13 @@ class SafetyPolicy:
                 risk = level
                 reasons.append(f"key {action.args['key']} acts at once ({level.name})")
 
+        # opening a program (a downloaded setup.exe …) runs it: only after a yes
+        if action.kind == "open_file":
+            suffix = Path(str(action.args.get("path") or action.target)).suffix.lower()
+            if suffix in self.rules.program_extensions and risk < RiskLevel.YELLOW:
+                risk = RiskLevel.YELLOW
+                reasons.append(f"opening {suffix} runs a program (YELLOW)")
+
         # changing a value in Windows settings (a switch, an option) — confirmed, never silent
         app = app_of(action.page_url)
         changes_setting = "value_change" in action.flags and app in self.rules.settings_apps
@@ -192,7 +202,21 @@ class SafetyPolicy:
 
         return risk, reasons
 
+    def blocked_file(self, action: Action) -> str | None:
+        """A secret / key / profile file an attach or open would hand out: the rule it matches."""
+        path = str(action.args.get("path") or "")
+        if action.kind not in ("attach_file", "open_file") or not path:
+            return None
+        low = path.lower().replace("/", "\\")
+        return next(
+            (p for p in self.rules.blocked_paths if fnmatch.fnmatchcase(low, p.lower())), None
+        )
+
     def check(self, action: Action) -> PolicyResult:
+        blocked = self.blocked_file(action)
+        if blocked is not None:
+            why = f"{action.args.get('path')} is a protected file (matches {blocked})"
+            return PolicyResult(decision=Decision.REFUSE, risk=RiskLevel.RED, reasons=[why])
         risk, reasons = self.classify(action)
 
         if risk == RiskLevel.GREEN:

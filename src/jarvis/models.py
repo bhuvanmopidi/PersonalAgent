@@ -44,3 +44,4 @@ class ActionResult(BaseModel):
     error: str | None = None
     observation: str = ""
     duration_ms: float = 0.0
+    data: dict[str, Any] = Field(default_factory=dict)  # facts for the agent (e.g. attached file)

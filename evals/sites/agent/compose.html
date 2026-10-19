@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><title>QuickMail - New message</title>
+<style> body { font-family: sans-serif; padding: 20px; } label { display: block; margin-top: 10px; }
+  input[type=text], textarea { width: 420px; } #files span { margin-right: 10px; color: #135; } </style>
+</head>
+<body>
+  <h1>New message</h1>
+  <div role="dialog" aria-label="New message">  <!-- a compose window, like most mail sites -->
+  <label>To <input type="text" id="to" aria-label="To recipients"></label>
+  <label>Subject <input type="text" id="subject" aria-label="Subject"></label>
+  <label>Message <textarea id="body" rows="5" aria-label="Message body"></textarea></label>
+  <!-- like most mail sites: the real file box is hidden; the Attach button opens the file picker -->
+  <input type="file" id="picker" multiple style="display:none">
+  <p><button id="attach" aria-label="Attach files">📎 Attach</button> <span id="files"></span></p>
+  <p><button id="send">Send</button></p>
+  </div>
+<script>
+  const picked = [];
+  document.getElementById("attach").addEventListener("click", () => document.getElementById("picker").click());
+  document.getElementById("picker").addEventListener("change", (e) => {
+    for (const f of e.target.files) picked.push(f.name);
+    document.getElementById("files").innerHTML = picked.map(n => `<span>📄 ${n}</span>`).join("");
+  });
+  document.getElementById("send").addEventListener("click", () => {
+    const q = new URLSearchParams({to: document.getElementById("to").value,
+      subject: document.getElementById("subject").value, files: picked.join(",")});
+    location.href = "sent.html?" + q.toString();
+  });
+</script>
+</body></html>

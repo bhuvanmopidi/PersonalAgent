@@ -8,8 +8,9 @@ tasks, and a vision fallback for everything else. Local-first, with human checkp
 > Settings, File Explorer, Calculator…): it reads the page or the app's controls as text and works
 > See → Think → Act → Check, with every step safety-checked. Plus voice control, instant commands,
 > and an LLM layer that understands any phrasing.
-> Next: 11.3 files in and out (attach / upload anywhere), 11.4 checkout guard, live dictation —
-> generic abilities; Gmail / Amazon / Word are just tasks for them.
+> Files too (11.3): "mail my resume to …" finds the file, attaches it, and the Send question names it.
+> Next: 11.4 checkout guard, then skills (speed), memory, live dictation — generic abilities;
+> Amazon / Word are just tasks for them.
 > Docs: [docs/](docs/README.md)
 
 ## Setup

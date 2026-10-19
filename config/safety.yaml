@@ -7,7 +7,8 @@ kinds:
     [launch_app, close_app, open_url, open_folder, find_file, set_volume, set_brightness,
      lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait,
      youtube_play, media_key, browser_nav, set_ad_policy, set_llm_provider, llm_status,
-     press_key, select_option, find, navigate, go_back, double_click, switch_window, check_file]
+     press_key, select_option, find, navigate, go_back, double_click, switch_window, check_file,
+     attach_file, open_file, wait_download]
   # change_system_setting: confirmed, not handed over (user's choice, 2026-10-19)
   yellow: [send, submit_form, delete_file, move_file, place_order, change_system_setting]
   payment: [pay]
@@ -36,6 +37,16 @@ flags:
 # types a value — the agent marks these "value_change") is confirmed first. Looking around and
 # reading are free. Apps by program name. Administrator prompts are never touched (the agent stops).
 settings_apps: [systemsettings, mmc, regedit]
+
+# Files (Phase 11.3). Attaching is free — the Send / Submit question names the attached files
+# (user's choice, 2026-10-19). These are never attached or opened (matched against the full path,
+# case-insensitive; * = anything): secrets, keys, browser profiles, password vaults, Jarvis's data.
+blocked_paths:
+  ["*\\.env", "*\\.env.*", "*\\.ssh\\*", "*.pem", "*.key", "*.pfx", "*.p12", "*\\id_rsa*",
+   "*\\id_ed25519*", "*.kdbx", "*\\AppData\\*\\User Data\\*", "*\\JarvisAgent\\*",
+   "*\\.aws\\*", "*\\.git-credentials", "*.ovpn"]
+# Opening one of these runs a program: only after a yes (user's choice).
+program_extensions: [.exe, .msi, .bat, .cmd, .ps1, .vbs, .js, .jse, .wsf, .scr, .com, .lnk, .reg]
 
 # Key presses that act at once in many apps — confirm (matched on the normalised combo).
 risky_keys:

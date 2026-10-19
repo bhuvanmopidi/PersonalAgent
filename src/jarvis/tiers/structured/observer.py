@@ -33,6 +33,7 @@ class Element(BaseModel):
     password: bool = False
     otp: bool = False
     focused: bool = False
+    group: int = 0  # the form / dialog it belongs to (0 = none) — see Snapshot.groups
 
 
 class Snapshot(BaseModel):
@@ -46,6 +47,12 @@ class Snapshot(BaseModel):
     cover: str = ""  # what covers them: the popup's own text
     cover_share: float = 0.0  # how much of the screen that popup takes (0–1)
     windows: list[str] = Field(default_factory=list)  # desktop: the other open app windows
+    # forms / dialogs on the page: group id → its text. A Send / Submit question reads back what
+    # is in the SAME group as the button (e.g. one compose window, not another one)
+    groups: dict[int, str] = Field(default_factory=dict)
+    # screen-reader announcements ("Message sent", "Attachment X added") — kept OUT of `text`:
+    # sites leave old ones in the page, and they must not read as what the page shows now
+    announcements: list[str] = Field(default_factory=list)
     folders: dict[str, str] = Field(default_factory=dict)  # desktop: where Desktop, Documents … are
 
     def fingerprint(self) -> tuple[str, ...]:
@@ -62,6 +69,9 @@ class Snapshot(BaseModel):
             lines.append("Headings: " + " | ".join(self.headings))
         if self.text:
             lines.append(f"Text: {self.text}")
+        if self.announcements:
+            said = " | ".join(self.announcements)
+            lines.append(f"Page announcements since your last look: {said}")
         lines.append("Elements:")
         for e in self.elements:
             kind = e.role or e.tag
@@ -181,6 +191,14 @@ _SNAPSHOT_JS = r"""([attr, maxEls, maxText]) => {
     const label = clean(el.getAttribute('aria-label')), text = clean(el.innerText);
     return label && text && !label.includes(text) ? cut(text, 60) : '';
   };
+  // which form / dialog an element is in — a Send button reads back ITS form, not another one
+  const groupIds = new Map();
+  const groupOf = el => {
+    const box = el.closest('form, dialog, [role=dialog], [aria-modal="true"]');
+    if (!box) return 0;
+    if (!groupIds.has(box)) groupIds.set(box, groupIds.size + 1);
+    return groupIds.get(box);
+  };
   const out = []; let id = 0; let truncated = false; let covered = 0;
   for (const el of document.querySelectorAll('body *')) {
     const semantic = el.matches(sel);
@@ -207,12 +225,19 @@ _SNAPSHOT_JS = r"""([attr, maxEls, maxText]) => {
       checked: (type === 'checkbox' || type === 'radio') ? el.checked
         : (el.getAttribute('aria-checked') ? el.getAttribute('aria-checked') === 'true' : null),
       disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
-      password, otp, focused: document.activeElement === el,
+      password, otp, focused: document.activeElement === el, group: groupOf(el),
     });
   }
   const headings = [...document.querySelectorAll('h1, h2, h3')].filter(visible)
     .map(h => cut(clean(h.innerText), 80)).filter(Boolean).slice(0, 8);
-  const text = cut(clean(document.body ? document.body.innerText : ''), maxText);
+  // announcements for screen readers: listed apart, and taken out of the page text
+  const liveSel = '[aria-live]:not([aria-live=off]), [role=status], [role=alert]';
+  const live = [...document.querySelectorAll(liveSel)]
+    .map(e => clean(e.innerText)).filter(t => t && t.length < 200);
+  const announcements = [...new Set(live)].slice(0, 5);
+  let bodyText = clean(document.body ? document.body.innerText : '');
+  for (const a of announcements) bodyText = bodyText.replace(a, ' ');
+  const text = cut(clean(bodyText), maxText);
   let cover = '', coverShare = 0, most = 0;
   for (const [box, n] of covers) if (n > most) {
     most = n;
@@ -221,8 +246,10 @@ _SNAPSHOT_JS = r"""([attr, maxEls, maxText]) => {
     coverShare = Math.round(100 * Math.min(1, (r.width * r.height) / (innerWidth * vh))) / 100;
   }
   const moreBelow = truncated || document.documentElement.scrollHeight > window.scrollY + vh * 2;
+  const groups = {};
+  for (const [box, gid] of groupIds) groups[gid] = cut(clean(box.innerText), 600);
   return {url: location.href, title: document.title, headings, text, elements: out,
-          more_below: moreBelow, covered, cover, cover_share: coverShare};
+          more_below: moreBelow, covered, cover, cover_share: coverShare, groups, announcements};
 }"""
 
 

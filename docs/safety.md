@@ -148,6 +148,20 @@ added:
 Store apps (Calculator, Settings…) share one Windows host process; the agent resolves the real
 program behind the window (`systemsettings`), so the settings rule can't be dodged by that.
 
+## Files (Phase 11.3)
+
+| Rule | Effect |
+|---|---|
+| The file an `attach` / `open_file` means is found **before** the safety check (`FileResolver`) | The policy judges the real file, not the words |
+| `blocked_paths` — `.env`, `.ssh\`, keys (`.pem .key .pfx .p12`, `id_rsa`, `id_ed25519`), password vaults (`.kdbx`), browser profiles (`AppData\…\User Data`), `.aws\`, `.git-credentials`, `.ovpn`, Jarvis's data | **REFUSE** — never attached or opened, and not worked around |
+| `program_extensions` — `.exe .msi .bat .cmd .ps1 .vbs .js .scr .com .lnk .reg …` | `open_file` → 🟡 confirm (user's choice) |
+| Attaching | 🟢 free; the **Send / Submit** question names the attached files (user's choice): *click "Send" … — with Resume_2026.pdf attached?* |
+| Several files match a description | The agent asks which one; never picks |
+| The Send / Submit question | Reads back the button's own form / dialog: recipients, filled fields, attachments or "no attachments" |
+| A step the user confirmed | Never runs a second time in the same task (no double send / order / delete) |
+| Escape / Tab / arrow keys | Don't inherit the focused button's label — only Enter / Space press it |
+| The page's own question box (`confirm`, `prompt`, "leave page?") | Asked to the user: *The page asks: "…" — OK?* — never auto-answered (left alone, the browser library would answer Cancel) |
+
 ## Planned layers
 
 Each one can only *raise* risk:

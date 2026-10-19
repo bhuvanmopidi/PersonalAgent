@@ -20,6 +20,7 @@ from jarvis.executors.base import ActionRunner
 from jarvis.executors.browser import BROWSER_KINDS, BrowserExecutor
 from jarvis.executors.browser_session import BrowserSession, BrowserUnavailable
 from jarvis.executors.desktop import DesktopExecutor, DesktopSession
+from jarvis.executors.files import FileResolver, chain
 from jarvis.executors.llm_control import LLM_KINDS, LLMControlExecutor
 from jarvis.executors.os_executor import OSExecutor
 from jarvis.executors.router import KindRouter
@@ -122,7 +123,9 @@ class Agent:
             system, [(BROWSER_KINDS, browser), (LLM_KINDS, LLMControlExecutor(llm))],
             surfaces={"desktop": DesktopExecutor(desktop, launcher)},
         )  # fmt: skip
-        runner = ActionRunner(policy, executor, spoken, annotate=browser.annotate)
+        # before the safety check: the page an action is on, and the real file it means
+        annotate = chain(browser.annotate, FileResolver().annotate)
+        runner = ActionRunner(policy, executor, spoken, annotate=annotate)
         browser.captcha.escalate = runner.run_action  # CAPTCHA handoffs go through the runner too
         kill = KillSwitch(settings.hotkeys.kill)
         task_agent = None

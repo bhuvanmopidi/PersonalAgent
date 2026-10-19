@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><title>QuickMail - Sent</title></head>
+<body>
+  <h1 id="h">Message sent</h1>
+  <p id="d"></p>
+<script>
+  const p = new URLSearchParams(location.search);
+  document.getElementById("d").textContent =
+    "To: " + p.get("to") + " | Subject: " + p.get("subject") + " | Attachments: " + (p.get("files") || "none");
+</script>
+</body></html>

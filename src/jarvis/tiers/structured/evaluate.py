@@ -27,6 +27,7 @@ from jarvis.config import PROJECT_ROOT, Settings
 from jarvis.executors.base import ActionRunner
 from jarvis.executors.browser import BrowserExecutor
 from jarvis.executors.desktop import DesktopExecutor, DesktopSession
+from jarvis.executors.files import FileResolver, chain
 from jarvis.planner.connectivity import Connectivity
 from jarvis.planner.evaluate import cost, openrouter_prices
 from jarvis.safety.confirm import ScriptedConfirmer
@@ -39,6 +40,24 @@ TASKS_PATH = PROJECT_ROOT / "evals" / "agent_tasks.yaml"
 SITES = PROJECT_ROOT / "evals" / "sites" / "agent"
 TEST_APP = PROJECT_ROOT / "evals" / "apps" / "testapp.ps1"
 TEST_APP_TITLE = "Jarvis Test App"
+TEST_FILES = PROJECT_ROOT / "evals" / "files"
+
+
+def task_folders(task: AgentTask) -> tuple[Path, Path]:
+    """A fresh temp "user folder" holding only the task's files, and a downloads folder — so evals
+    never search (or download into) the user's real folders."""
+    import shutil
+    import tempfile
+
+    base = Path(tempfile.mkdtemp(prefix=f"jarvis-eval-{task.id}-"))
+    files, downloads = base / "Documents", base / "Downloads"
+    files.mkdir()
+    downloads.mkdir()
+    for name in task.files:
+        shutil.copy(TEST_FILES / name, files / name)
+    return files, downloads
+
+
 RESULTS_DIR = PROJECT_ROOT / "evals" / "results"
 
 
@@ -48,6 +67,7 @@ class AgentTask(BaseModel):
     start: str  # browser: a page in evals/sites/agent · desktop: "testapp", or "" (agent opens it)
     where: Literal["browser", "desktop"] = "browser"
     close_after: str = ""  # desktop: an app to close afterwards (e.g. "calculator")
+    files: list[str] = Field(default_factory=list)  # from evals/files: the task's "user folders"
     answers: list[bool] = Field(default_factory=list)
     success: dict[str, Any] = Field(default_factory=dict)
 
@@ -141,7 +161,10 @@ async def run_desktop_task(task: AgentTask, settings: Settings) -> TaskResult:
                 await asyncio.sleep(0.1)
         confirmer = ScriptedConfirmer(list(task.answers))
         policy = SafetyPolicy.from_yaml()
-        runner = ActionRunner(policy, DesktopExecutor(session, launcher), confirmer)
+        files, downloads = task_folders(task)
+        desktop = DesktopExecutor(session, launcher)
+        desktop.downloads_dir = downloads
+        runner = ActionRunner(policy, desktop, confirmer, annotate=FileResolver([files]).annotate)
         planners = build_agent_planners(settings, Connectivity(probe=lambda: True))
         agent = TaskAgent(planners, {"desktop": DesktopSurface(session)}, runner.run_action,
                           settings.agent, trace_dir=default_trace_dir())  # fmt: skip
@@ -179,7 +202,10 @@ async def run_task(browser: Any, task: AgentTask, settings: Settings) -> TaskRes
     executor = BrowserExecutor(
         _Session(context), load_youtube_config(), policy.rules.captcha, confirmer, _silent
     )
-    runner = ActionRunner(policy, executor, confirmer, annotate=executor.annotate)
+    files, downloads = task_folders(task)
+    executor.downloads_dir = downloads
+    annotate = chain(executor.annotate, FileResolver([files]).annotate)
+    runner = ActionRunner(policy, executor, confirmer, annotate=annotate)
     executor.captcha.escalate = runner.run_action
     planners = build_agent_planners(settings, Connectivity(probe=lambda: True))
     agent = BrowserAgent(planners, executor, runner.run_action, settings.agent,

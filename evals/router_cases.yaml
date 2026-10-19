@@ -110,6 +110,10 @@ cases:
       context_did: "task(goal=make a new word file, where=desktop) -> I've created a new blank Word document for you.",
       text: "write down the code for palindrome in python and save it in desktop as jarvis",
       kind: task, where: desktop, goal_has: [word, palindrome, jarvis] }
+  # files in and out (Phase 11.3)
+  - { tag: task, text: "mail my resume to arjun@gmail.com", kind: task, where: browser, goal_has: [resume, arjun] }
+  - { tag: task, text: "upload my photo to the college portal", kind: task, goal_has: [photo] }
+  - { tag: task, text: "download the invoice from this page and open it", kind: task, goal_has: [invoice] }
   # a Windows setting: the agent does it, the change is confirmed (user's choice, 2026-10-19)
   - { tag: app, text: "turn off the wifi", kind: task, where: desktop, goal_has: [wi] }
 
