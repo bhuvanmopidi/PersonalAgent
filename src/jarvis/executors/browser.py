@@ -36,7 +36,7 @@ log = get_logger(__name__)
 AGENT_KINDS = frozenset(
     {"click", "double_click", "type_text", "press_key", "select_option", "scroll", "find",
      "navigate", "go_back", "wait", "attach_file", "open_file", "wait_download",
-     "tab_open", "tab_switch", "tab_close", "private_window"}
+     "tab_open", "tab_switch", "tab_close", "private_window", "click_at", "type_at"}
 )  # fmt: skip
 MAX_TABS_SHOWN = 8
 _LINK_JS = "el => { const a = el.closest('a[href]'); return a ? a.href : ''; }"
@@ -85,11 +85,42 @@ _FIND_JS = r"""(q) => {
   const around = (first.innerText || first.getAttribute('aria-label') || '').replace(/\s+/g, ' ');
   return {count: shown.length, around: around.trim().slice(0, 80)};
 }"""
-_SCROLL_JS = """(where) => {
-  if (where === 'scroll_top') window.scrollTo(0, 0);
-  else if (where === 'scroll_bottom') window.scrollTo(0, document.documentElement.scrollHeight);
-  else window.scrollBy(0, (where === 'scroll_up' ? -0.8 : 0.8) * innerHeight);
+# What scrolls here? Many web apps (chat apps, mail, docs) scroll an inner panel, not the page.
+# Like a person: the panel under the middle of the screen (or the biggest one), else the page.
+# Marks it, and returns where it is and how far it has scrolled.
+_SCROLLER_JS = """() => {
+  const scrolls = e => {
+    const s = getComputedStyle(e);
+    return /(auto|scroll|overlay)/.test(s.overflowY) && e.scrollHeight > e.clientHeight + 4;
+  };
+  let pick = null;
+  for (let e = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+       e && e !== document.body && e !== document.documentElement; e = e.parentElement)
+    if (scrolls(e)) { pick = e; break; }
+  const page = document.scrollingElement || document.documentElement;
+  if (!pick && page.scrollHeight <= page.clientHeight + 4) {
+    let area = 0;
+    for (const e of document.querySelectorAll('div, main, section, article, ul, ol')) {
+      if (!scrolls(e)) continue;
+      const r = e.getBoundingClientRect(), a = r.width * r.height;
+      if (a > area) { area = a; pick = e; }
+    }
+  }
+  for (const e of document.querySelectorAll('[data-jarvis-scroll]'))
+    e.removeAttribute('data-jarvis-scroll');
+  const el = pick || page;
+  el.setAttribute('data-jarvis-scroll', '1');
+  const r = pick ? pick.getBoundingClientRect()
+    : {left: 0, top: 0, width: innerWidth, height: innerHeight};
+  return {x: r.left + r.width / 2, y: r.top + r.height / 2, top: el.scrollTop,
+          height: el.clientHeight, max: el.scrollHeight - el.clientHeight, inner: !!pick};
 }"""
+_SCROLL_POS_JS = """() => {
+  const e = document.querySelector('[data-jarvis-scroll]');
+  return e ? e.scrollTop : 0;
+}"""
+_SCROLL_END_JS = """(top) => { const e = document.querySelector('[data-jarvis-scroll]');
+  if (e) e.scrollTo({top: top ? 0 : e.scrollHeight}); }"""
 _SCROLLED = {
     "scroll_down": "Scrolled down",
     "scroll_up": "Scrolled up",
@@ -479,6 +510,13 @@ class BrowserExecutor:
                 return ok(f"Pressed {key}{await self._follow_new_tab(page, before)}")
             if action.kind in ("tab_open", "tab_switch", "tab_close", "private_window"):
                 return await self._tabs_op(page, loc, action, what)
+            if action.kind in ("click_at", "type_at"):  # a box picked on a screenshot
+                before = self._tab_ids(page)
+                await page.mouse.click(float(a["x"]), float(a["y"]))
+                if action.kind == "type_at":
+                    await page.keyboard.type(str(a.get("text", "")), delay=20)
+                await _settle(page)
+                return ok(f"Clicked {what}{await self._follow_new_tab(page, before)}")
             if action.kind == "select_option":
                 if loc is None:
                     return fail("bad_element", "select needs an element")
@@ -498,10 +536,7 @@ class BrowserExecutor:
                 return ok(f"Selected {pick[0] if pick else wanted!r} in {what}")
             if action.kind == "scroll":
                 up = str(a.get("direction", "down")).lower() == "up"
-                await page.evaluate(
-                    "(up) => window.scrollBy(0, (up ? -0.8 : 0.8) * innerHeight)", up
-                )
-                return ok(f"Scrolled {'up' if up else 'down'}")
+                return await self._scroll(page, "scroll_up" if up else "scroll_down")
             if action.kind == "find":
                 words = str(a.get("text", "")).strip()
                 if not words:
@@ -715,6 +750,23 @@ class BrowserExecutor:
             await self._use_tab(rest[-1])
         return ok(f"Closed the tab: {title}")
 
+    async def _scroll(self, page: Page, where: str) -> ActionResult:
+        """Scroll like a person: the mouse wheel over what scrolls here (a chat panel, a list, or
+        the page) — and say honestly whether anything moved."""
+        box = await page.evaluate(_SCROLLER_JS)
+        if where in ("scroll_top", "scroll_bottom"):
+            await page.evaluate(_SCROLL_END_JS, where == "scroll_top")
+        else:
+            step = max(100.0, 0.8 * float(box["height"]))
+            await page.mouse.move(float(box["x"]), float(box["y"]))
+            await page.mouse.wheel(0, -step if where == "scroll_up" else step)
+        await page.wait_for_timeout(250)  # smooth scrolling takes a moment
+        moved = abs(float(await page.evaluate(_SCROLL_POS_JS)) - float(box["top"])) > 2
+        if not moved:
+            end = "top" if where in ("scroll_up", "scroll_top") else "bottom"
+            return ok(f"Nothing moved — already at the {end}")
+        return ok(_SCROLLED[where])
+
     async def _covered(self, loc: Locator, what: str) -> ActionResult | None:
         """Fail at once — with the reason — if something covers the element (no 3 s wait)."""
         try:
@@ -820,8 +872,7 @@ class BrowserExecutor:
             await page.close()
             return ok("Closed the tab")
         if where in _SCROLLED:
-            await page.evaluate(_SCROLL_JS, where)
-            return ok(_SCROLLED[where])
+            return await self._scroll(page, where)
         return fail("unsupported", f"Unknown navigation '{where}'")
 
     def _set_ad_policy(self, value: str) -> ActionResult:

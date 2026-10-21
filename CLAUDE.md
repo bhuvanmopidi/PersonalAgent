@@ -114,7 +114,7 @@ User controls: history panel (view/delete), pause memory, forget everything.
 - **Voice:** wake word (openWakeWord), Silero VAD, faster-whisper (streaming), Piper TTS. Later: Indian languages (IndicConformer etc.).
 - **Desktop:** UI Automation via the `uiautomation` package (chosen over pywinauto for speed: ~0.1–0.4 s per look), keyboard via pynput, win32com, mss (screenshots).
 - **Browser:** Playwright over CDP.
-- **Vision fallback:** OmniParser + vision LLM.
+- **Vision fallback:** OmniParser v2 icon detector (YOLO, ultralytics) on the GPU via PyTorch 2.8 + CUDA 12.9 + Claude Haiku 5.5 (OpenRouter) looking at the numbered screenshot; used only when the text view isn't enough. Detector weights are AGPL-3.0 (swap for a product).
 - **Brain:** rules → LLM router (Phase 7: **OpenRouter → Claude Haiku 5.5** (default online — chosen by benchmark: 92% / 6% wrong / 1.7 s; OpenRouter credits, not direct Claude/OpenAI), OpenAI gpt-4o-mini, Claude Haiku 5.5, or a local Ollama model (qwen2.5:3b); **offline always the local model**; online provider user-selectable, default confirmed from `jarvis eval-router`) → later embeddings + classifier (Phase 14). Provider-agnostic interface in `planner/llm.py` using the **official `openai`, `anthropic` and `ollama` SDKs** (chosen over PydanticAI: one structured call, fewer deps). Planner/agent model for later phases: Claude Opus 5.5.
 - **Backend:** Python 3.12 (asyncio), local FastAPI/websocket for UI. Env/deps managed with **uv**.
 - **Shell UI:** Tauri tray app — global hotkey, status overlay, confirmation dialogs, history panel.
@@ -173,7 +173,7 @@ PersonalAgent/
 | 13 | Storage | SQLCipher + DPAPI, sqlite-vec, history |
 | 14 | Router cascade | context resolution, embeddings, classifier, decomposer |
 | 14b | Learned risk classifier | synthetic + public + adversarial + logged data; embeddings baseline → fine-tuned MiniLM (ONNX, <10 ms); optimise ≥99% recall on PAYMENT/RED; raise-only |
-| 15 | Tier-4 vision | mss + OmniParser + vision LLM — used when the text view can't make sense of a page (controls that only *look* like buttons, picture-only options such as colour swatches, icons, canvas apps); eval cases from the Flipkart tests |
+| 15 | Tier-4 vision — done (built before 12) | mss + OmniParser + vision LLM — used when the text view can't make sense of a page (controls that only *look* like buttons, picture-only options such as colour swatches, icons, canvas apps); eval cases from the Flipkart tests |
 | 16 | Eval suite + Tauri UI | ~50 tasks, metrics; **adversarial safety evals** (miss rate per layer: rules vs judge vs classifier vs ensemble); tray app |
 | Later | Indian-language voice, fine-tuned router, fine-tuned UI-grounding model |
 

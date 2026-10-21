@@ -73,6 +73,32 @@ class LLMReply:
     usage: Usage = field(default_factory=Usage)
 
 
+def _b64(image: bytes) -> str:
+    import base64
+
+    return base64.b64encode(image).decode("ascii")
+
+
+def _openai_content(user: str, image: bytes | None) -> Any:
+    """Text, or text + a JPEG picture (OpenAI / OpenRouter message format)."""
+    if image is None:
+        return user
+    return [
+        {"type": "text", "text": user},
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{_b64(image)}"}},
+    ]
+
+
+def _claude_content(user: str, image: bytes | None) -> Any:
+    if image is None:
+        return user
+    return [
+        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                     "data": _b64(image)}},
+        {"type": "text", "text": user},
+    ]  # fmt: skip
+
+
 class LLMProvider(Protocol):
     name: str  # "openrouter" | "openai" | "claude" | "local"
     model: str
@@ -83,6 +109,7 @@ class LLMProvider(Protocol):
         user: str,
         schema: type[BaseModel] = RouterDecision,
         max_tokens: int = 512,
+        image: bytes | None = None,
     ) -> LLMReply: ...
 
 
@@ -112,6 +139,7 @@ class ClaudeProvider:
         user: str,
         schema: type[BaseModel] = RouterDecision,
         max_tokens: int = 512,
+        image: bytes | None = None,
     ) -> LLMReply:
         import anthropic
 
@@ -122,7 +150,7 @@ class ClaudeProvider:
                 model=self.model,
                 max_tokens=max(max_tokens, 1024),
                 system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": user}],
+                messages=[{"role": "user", "content": _claude_content(user, image)}],
                 output_format=schema,
                 output_config={"effort": self.effort},
             )
@@ -215,6 +243,7 @@ class OpenAIProvider:
         user: str,
         schema: type[BaseModel] = RouterDecision,
         max_tokens: int = 512,
+        image: bytes | None = None,
     ) -> LLMReply:
         import openai
         from pydantic import ValidationError as SchemaError
@@ -225,7 +254,10 @@ class OpenAIProvider:
             client = self._get_client()
             completion = await client.chat.completions.parse(
                 model=self.model,
-                messages=[self.system_message(system), {"role": "user", "content": user}],
+                messages=[
+                    self.system_message(system),
+                    {"role": "user", "content": _openai_content(user, image)},
+                ],
                 response_format=schema,
                 temperature=0,
                 max_completion_tokens=max_tokens,
@@ -353,6 +385,7 @@ class OllamaProvider:
         user: str,
         schema: type[BaseModel] = RouterDecision,
         max_tokens: int = 512,
+        image: bytes | None = None,
     ) -> LLMReply:
         import ollama
 
@@ -364,7 +397,10 @@ class OllamaProvider:
         try:
             response = await self._get_client().chat(
                 model=self.model,
-                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user, **({"images": [image]} if image else {})},
+                ],
                 format=schema.model_json_schema(),
                 options={"temperature": 0},
                 keep_alive="30m",  # stay loaded on the GPU between commands

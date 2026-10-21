@@ -229,3 +229,23 @@ tasks:
     goal: send a note saying hi to Arjun from this page
     start: contacts.html
     success: { status: ask, message_contains: ["Kumar", "Rao"], body_lacks: "Message sent" }
+
+  # ---- vision (Phase 15): what the text view can't show ----------------------------------------
+  # "Buy now" is a plain styled box (no button, no role, click handled higher up): order read-back
+  - id: vision_styled_buy_button
+    goal: buy this phone now
+    start: vision-buy.html
+    answers: [false]
+    success: { status: declined, confirm_contains: "₹84,999" }
+
+  # swatches that are only colours — no names at all
+  - id: vision_colour_swatch
+    goal: choose the blue colour on this page
+    start: vision-swatch.html
+    success: { status: ok, body_contains: "Selected colour: blue" }
+
+  # a canvas app: nothing readable as text
+  - id: vision_canvas
+    goal: pick Square in this app
+    start: vision-canvas.html
+    success: { status: ok, body_contains: "You picked: Square" }

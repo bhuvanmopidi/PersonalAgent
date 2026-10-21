@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><title>PhoneKart - pick a colour</title>
+<style> body { font-family: sans-serif; margin: 24px; }
+  .sw { display: inline-block; width: 56px; height: 56px; border-radius: 50%; margin: 10px;
+        border: 3px solid #ddd; cursor: pointer; } </style></head>
+<body>
+  <h1>Earbuds — choose a colour</h1>
+  <p id="sel">No colour chosen</p>
+  <!-- colour swatches that are ONLY colours: no names, no labels, no text -->
+  <div id="row"></div>
+<script>
+  const colours = [["#d62828", "red"], ["#1d4ed8", "blue"], ["#111111", "black"], ["#f4f4f4", "white"]];
+  document.getElementById("row").innerHTML = colours.map(([hex, name]) =>
+    `<span class="sw" style="background:${hex}" data-c="${name}"></span>`).join("");
+  document.getElementById("row").addEventListener("click", (e) => {
+    const c = e.target.dataset.c;
+    if (c) document.getElementById("sel").textContent = "Selected colour: " + c;
+  });
+</script>
+</body></html>

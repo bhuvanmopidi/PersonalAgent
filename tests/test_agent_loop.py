@@ -52,7 +52,12 @@ class ScriptPlanner:
         self.prompts: list[str] = []
 
     async def decide(
-        self, system: str, user: str, schema: object = None, max_tokens: int = 512
+        self,
+        system: str,
+        user: str,
+        schema: object = None,
+        max_tokens: int = 512,
+        image: bytes | None = None,
     ) -> LLMReply:
         self.prompts.append(user)
         nxt = self.script.pop(0) if self.script else LLMUnavailable("script over")

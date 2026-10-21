@@ -31,6 +31,7 @@ from jarvis.tiers.structured.observer import Element, Snapshot, what_changed
 from jarvis.tiers.structured.prompts import DESKTOP_SYSTEM, SYSTEM, user_prompt
 from jarvis.tiers.structured.schema import MAX_ACTIONS, AgentAction, AgentStep
 from jarvis.tiers.structured.surface import BrowserSurface, Surface, SurfaceName
+from jarvis.tiers.vision.eyes import Eyes, Look
 
 if TYPE_CHECKING:
     from jarvis.executors.browser import BrowserExecutor
@@ -52,13 +53,16 @@ _KIND = {
 }  # fmt: skip
 _TAB_OPS = {"new_tab", "switch_tab", "close_tab", "private_window"}  # browser only
 _WEB = ("http://", "https://", "file://")
+_LOOK = {"look"}  # both surfaces: see the screen (vision) on the next round
+MAX_LOOKS_PER_PAGE = 3
 _FILE_OPS = {"attach", "wait_download", "open_file"}  # both surfaces: files in and out
 # what each surface can do (the planner is told; anything else is rejected before it runs)
 OPS: dict[SurfaceName, frozenset[str]] = {
     "browser": frozenset({"click", "double_click", "type", "press", "select", "scroll", "find",
-                          "navigate", "back", "wait", *_FILE_OPS, *_TAB_OPS}),
+                          "navigate", "back", "wait", *_FILE_OPS, *_TAB_OPS, *_LOOK}),
     "desktop": frozenset({"click", "double_click", "type", "press", "select", "scroll", "find",
-                          "back", "wait", "open_app", "switch", "check_file", *_FILE_OPS}),
+                          "back", "wait", "open_app", "switch", "check_file", *_FILE_OPS,
+                          *_LOOK}),
 }  # fmt: skip
 _SYSTEM: dict[SurfaceName, str] = {"browser": SYSTEM, "desktop": DESKTOP_SYSTEM}
 # controls whose click changes a value (a switch, a box, an option) — matters in Windows Settings
@@ -130,6 +134,41 @@ def _short(location: str) -> str:
     """An address short enough for the history, keeping what tells pages apart (path + query)."""
     rest = location.split("://", 1)[-1]
     return rest if len(rest) <= 110 else rest[:70] + "…" + rest[-35:]
+
+
+VISION_NOTE = """
+
+You are also SEEING THE SCREEN: the picture shows where you work, with {n} numbered boxes on \
+what can be clicked. In this step, `element` means a BOX NUMBER from the picture (not a [number] \
+from the text list), and every click / double_click / type on a box must set `label` to what that \
+box shows (its words, or what the icon / picture is, e.g. "Buy now", "black colour swatch"). Use \
+the picture for what the text can't show; press / scroll / back / wait work as usual."""
+
+
+def box_action(
+    act: AgentAction, look: Look, snap: Snapshot, surface: SurfaceName
+) -> tuple[Action | None, str | None]:
+    """A step on a numbered box of a screenshot → a click / type at its centre. Its label (what
+    the box shows, read by the vision model) is what the safety policy judges."""
+    if act.op not in ("click", "double_click", "type"):
+        return None, f"{act.op} on a picture box isn't possible — use click or type"
+    point = look.click_point(int(act.element or 0))
+    if point is None:
+        return None, f"there is no box {act.element} in the picture"
+    label = (act.label or "").strip()
+    flags = {_RISK_FLAG[act.risk_hint]} if act.risk_hint in _RISK_FLAG else set()
+    args: dict[str, Any] = {"x": round(point[0], 1), "y": round(point[1], 1)}
+    if act.op == "type":
+        args["text"] = act.text or ""
+    if surface == "desktop":
+        args["surface"] = "desktop"
+    kind = "type_at" if act.op == "type" else "click_at"
+    where = f"in {snap.title}" if surface == "desktop" else (
+        "on " + (snap.url.split("/")[2] if "://" in snap.url else snap.url))  # fmt: skip
+    what = f'"{label}"' if label else f"box {act.element} on the screen"
+    verb = {"click": "click", "double_click": "double-click", "type": "type into"}[act.op]
+    return Action(kind=kind, target=label, args=args, description=f"{verb} {what} {where}",
+                  flags=flags, page_url=snap.url), None  # fmt: skip
 
 
 def tidy(message: str) -> str:
@@ -292,8 +331,10 @@ class TaskAgent:
         settings: AgentSettings,
         trace_dir: Path | None = None,
         clock: Callable[[], float] = time.monotonic,
+        eyes: Eyes | None = None,
     ) -> None:
         self.planners = planners
+        self.eyes = eyes  # the vision tier: a screenshot when text isn't enough (None = text only)
         self.surfaces = surfaces
         self.run_action = run_action  # ActionRunner.run_action — every step is risk-checked
         self.settings = settings
@@ -305,6 +346,10 @@ class TaskAgent:
         started = self.clock()
         history: list[str] = []
         previous: Snapshot | None = None  # the last look, to tell the model what changed
+        look_next = False  # the agent asked to see the screen (vision) on its next look
+        looks: dict[str, int] = {}
+        last_plan: list[str] = []  # the agent's own plan, shown back to it every step
+        last_blocker: str | None = None  # screenshots asked for, per page
         visits: dict[str, list[Any]] = {}  # page → [title, times seen] — to stop re-checking
         thoughts: list[str] = []  # the planner's notes ("Airdopes 141 at ₹1,199") — for a pay step
         seen: set[tuple[Any, ...]] = set()
@@ -346,11 +391,22 @@ class TaskAgent:
             heard.update(snap.announcements)
             snap = snap.model_copy(update={"announcements": fresh})
             where_before = surface.location()
+            # vision: when the agent asked to look, or an app window shows nothing readable
+            look = None
+            blank_app = surface.name == "desktop" and not snap.elements and snap.url != "app://none"
+            if self.eyes is not None and (look_next or blank_app):
+                try:
+                    look = await self.eyes.look(surface)
+                except Exception:
+                    log.warning("couldn't look at the screen", exc_info=True)
+                    history.append("look: not possible right now — use the text view")
+            look_next = False
 
             try:
                 plan, step_usage = await self._plan(goal, step, history, snap, surface.name,
                                                     _pages_seen(visits),
-                                                    what_changed(previous, snap))  # fmt: skip
+                                                    what_changed(previous, snap), look,
+                                                    last_plan, last_blocker)  # fmt: skip
             except LLMUnavailable as exc:
                 return outcome(
                     False, f"I need a cloud model for that, and {exc}.", "no_planner", step
@@ -359,16 +415,28 @@ class TaskAgent:
             usage = _add(usage, step_usage)
             trace.step(step, snap, plan)
             thoughts.append(plan.thought)
+            last_plan, last_blocker = plan.plan or last_plan, plan.blocker  # carried to next step
             visit = visits.setdefault(snap.url, [snap.title, 0])
             visit[1] += 1
 
             batch = plan.actions[:MAX_ACTIONS]
+            if any(a.op == "look" for a in batch):
+                look_next = True  # next round: a screenshot with numbered boxes
+                batch = [a for a in batch if a.op != "look"]
             for i, act in enumerate(batch):
-                action, problem = to_action(act, snap, surface.name)
+                if look is not None and act.element is not None:
+                    action, problem = box_action(act, look, snap, surface.name)
+                else:
+                    action, problem = to_action(act, snap, surface.name)
                 if action is None:
                     history.append(f"{act.op}: not done — {problem}")
                     break
-                if i > 0 and act.element is not None and not await surface.still_there(act.element):
+                if (
+                    look is None
+                    and i > 0
+                    and act.element is not None
+                    and not await surface.still_there(act.element)
+                ):
                     break  # the page re-drew that part: the number is stale — look again
                 # typing or clicking may pop up suggestions / a dropdown / a popup that must be
                 # dealt with first — so if more actions follow, check whether the page changed
@@ -466,6 +534,13 @@ class TaskAgent:
             acted_on = tuple(describe(a, snap.by_id(a.element)) for a in plan.actions)
             signature = (snap.fingerprint(), acted_on)
             moved_on = surface.location() != where_before  # this time it took us somewhere
+            only_looking = bool(plan.actions) and all(a.op == "look" for a in plan.actions)
+            if only_looking:  # looking again after new information isn't a loop — up to 3 times
+                looks[snap.url] = looks.get(snap.url, 0) + 1
+                if looks[snap.url] > MAX_LOOKS_PER_PAGE:
+                    return outcome(False, "I looked at this screen several times and still "
+                                   "couldn't find a way, so I stopped.", "stuck", step)  # fmt: skip
+                continue
             if signature in seen and not moved_on:
                 return outcome(False, "I'm going round in circles, so I stopped.", "stuck", step)
             seen.add(signature)
@@ -476,17 +551,24 @@ class TaskAgent:
     async def _plan(
         self, goal: str, step: int, history: list[str], snap: Snapshot,
         surface: SurfaceName = "browser", seen_pages: list[str] | None = None,
-        changed: list[str] | None = None,
+        changed: list[str] | None = None, look: Look | None = None,
+        last_plan: list[str] | None = None, last_blocker: str | None = None,
     ) -> tuple[AgentStep, Usage]:  # fmt: skip
         prompt = user_prompt(goal, step, self.settings.max_steps, history, snap,
-                             seen=seen_pages or [], changed=changed or [])  # fmt: skip
+                             seen=seen_pages or [], changed=changed or [],
+                             plan=last_plan or [], blocker=last_blocker)  # fmt: skip
+        image = None
+        if look is not None:
+            prompt += VISION_NOTE.format(n=len(look.boxes))
+            image = look.picture
         reasons = []
         # the main planner gets a second try (a dropped connection, a malformed reply happen);
         # the others are fallbacks
         attempts = self.planners[:1] * 2 + self.planners[1:]
         for planner in attempts:
             try:
-                reply = await planner.decide(_SYSTEM[surface], prompt, AgentStep, max_tokens=1200)
+                reply = await planner.decide(_SYSTEM[surface], prompt, AgentStep, max_tokens=1200,
+                                             **({"image": image} if image else {}))  # fmt: skip
             except LLMUnavailable as exc:
                 reasons.append(str(exc))
                 continue
@@ -510,9 +592,10 @@ class BrowserAgent(TaskAgent):
         settings: AgentSettings,
         trace_dir: Path | None = None,
         clock: Callable[[], float] = time.monotonic,
+        eyes: Eyes | None = None,
     ) -> None:
         super().__init__(planners, {"browser": BrowserSurface(browser)}, run_action, settings,
-                         trace_dir, clock)  # fmt: skip
+                         trace_dir, clock, eyes)  # fmt: skip
 
 
 def _add(a: Usage, b: Usage) -> Usage:
@@ -543,6 +626,8 @@ class Trace:
     def step(self, n: int, snap: Snapshot, plan: AgentStep) -> None:
         self._write({"event": "step", "n": n, "url": snap.url, "elements": len(snap.elements),
                      "thought": redact(plan.thought), "status": plan.status,
+                     "plan": [redact(p) for p in plan.plan],
+                     "blocker": redact(plan.blocker) if plan.blocker else None,
                      "actions": [a.model_dump() for a in plan.actions]})  # fmt: skip
 
     def action(self, action: Action, result: ActionResult, element: Element | None = None) -> None:

@@ -8,7 +8,8 @@ loop (agent.py) is the same for both; a Surface is how it looks and how it notic
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Protocol
+import asyncio
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from jarvis.models import ActionResult
 from jarvis.tiers.structured.observer import Snapshot, dom_size, observe, settle, still_there
@@ -20,6 +21,18 @@ if TYPE_CHECKING:
     from jarvis.executors.desktop import DesktopSession
 
 SurfaceName = Literal["browser", "desktop"]
+
+
+class Shot:
+    """A screenshot and how to turn its pixels back into a click position."""
+
+    def __init__(self, image: Any, origin: tuple[float, float] = (0, 0), scale: float = 1.0):
+        self.image = image  # PIL image
+        self.origin = origin  # where the picture's top-left is (desktop: on the screen)
+        self.scale = scale  # picture pixels per click unit
+
+    def to_click(self, x: float, y: float) -> tuple[float, float]:
+        return self.origin[0] + x / self.scale, self.origin[1] + y / self.scale
 
 
 class Surface(Protocol):
@@ -35,6 +48,10 @@ class Surface(Protocol):
     async def settle(self) -> None: ...
     def location(self) -> str:
         """Changes when the agent lands somewhere else (a new page / another window)."""
+        ...
+
+    async def screenshot(self) -> Shot | None:
+        """What's on screen where the agent works (kept in memory only), or None."""
         ...
 
 
@@ -74,6 +91,16 @@ class BrowserSurface:
         page = self.browser.agent_page
         return page.url if page is not None and not page.is_closed() else self._url
 
+    async def screenshot(self) -> Shot | None:
+        import io
+
+        from PIL import Image
+
+        page = await self._page()
+        # the visible part of the tab, in page (CSS) pixels — clicks go to the same coordinates
+        png = await page.screenshot(type="png", scale="css")
+        return Shot(Image.open(io.BytesIO(png)))
+
 
 class DesktopSurface:
     name: SurfaceName = "desktop"
@@ -107,3 +134,21 @@ class DesktopSurface:
     def location(self) -> str:
         window = self.session.window
         return f"{self.session.location()}#{window.handle}" if window else "app://none"
+
+    async def screenshot(self) -> Shot | None:
+        rect = await self.session.window_rect()
+        if rect is None:
+            return None
+        left, top, right, bottom = rect
+
+        def grab() -> Any:
+            import mss
+            from PIL import Image
+
+            with mss.mss() as screen:
+                raw = screen.grab({"left": left, "top": top, "width": right - left,
+                                   "height": bottom - top})  # fmt: skip
+                return Image.frombytes("RGB", raw.size, raw.rgb)
+
+        image = await asyncio.to_thread(grab)
+        return Shot(image, origin=(left, top))

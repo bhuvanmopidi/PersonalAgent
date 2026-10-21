@@ -54,7 +54,12 @@ class FakeProvider:
         self.delay = delay
 
     async def decide(
-        self, system: str, user: str, schema: object = None, max_tokens: int = 512
+        self,
+        system: str,
+        user: str,
+        schema: object = None,
+        max_tokens: int = 512,
+        image: bytes | None = None,
     ) -> LLMReply:
         self.calls.append(user)
         if self.delay:

@@ -34,7 +34,14 @@ class FakeReaderModel:
     def __init__(self, *replies: OrderSummary | Exception) -> None:
         self.replies = list(replies)
 
-    async def decide(self, system: str, user: str, schema: Any = None, max_tokens: int = 0) -> Any:
+    async def decide(
+        self,
+        system: str,
+        user: str,
+        schema: Any = None,
+        max_tokens: int = 0,
+        image: bytes | None = None,
+    ) -> Any:
         reply = self.replies.pop(0) if self.replies else LLMUnavailable("none left")
         if isinstance(reply, Exception):
             raise reply

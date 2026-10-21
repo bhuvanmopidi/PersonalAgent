@@ -8,7 +8,8 @@ kinds:
      lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait,
      youtube_play, media_key, browser_nav, set_ad_policy, set_llm_provider, llm_status,
      press_key, select_option, find, navigate, go_back, double_click, switch_window, check_file,
-     attach_file, open_file, wait_download, tab_open, tab_switch, tab_close, private_window]
+     attach_file, open_file, wait_download, tab_open, tab_switch, tab_close, private_window,
+     click_at, type_at]
   # change_system_setting: confirmed, not handed over (user's choice, 2026-10-19)
   yellow: [send, submit_form, delete_file, move_file, place_order, change_system_setting]
   payment: [pay]
@@ -16,7 +17,9 @@ kinds:
 
 # Keywords are matched against the target (the UI label being acted on) only for these kinds —
 # plus any unknown kind. Not for e.g. open_url, whose target is a URL built from the user's words.
-keyword_kinds: [click, hotkey, press_key, submit_form]
+keyword_kinds: [click, hotkey, press_key, submit_form, click_at]
+# a click picked on a screenshot must say what it clicks (the box's label); without one → confirm
+label_required_kinds: [click_at, type_at]
 
 # Matched as whole words/phrases (case-insensitive).
 keywords:

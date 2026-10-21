@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><title>ChatApp</title>
+<style>
+  /* like ChatGPT / Gmail / Slack: the page never scrolls — only the chat panel does */
+  html, body { height: 100%; margin: 0; overflow: hidden; font-family: sans-serif; }
+  .app { display: flex; height: 100%; }
+  nav { width: 220px; background: #eee; }
+  #chat { flex: 1; overflow-y: auto; padding: 0 20px; }
+  .msg { height: 140px; border-bottom: 1px solid #ddd; }
+</style></head>
+<body><div class="app"><nav>Chats</nav><div id="chat"></div></div>
+<script>
+  document.getElementById("chat").innerHTML =
+    Array.from({length: 30}, (_, i) => `<div class="msg">Message ${i + 1}</div>`).join("");
+</script></body></html>

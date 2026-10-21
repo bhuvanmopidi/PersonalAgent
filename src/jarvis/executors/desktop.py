@@ -40,7 +40,7 @@ T = TypeVar("T")
 DESKTOP_KINDS = frozenset(
     {"click", "double_click", "type_text", "press_key", "select_option", "scroll", "find", "wait",
      "launch_app", "switch_window", "go_back", "check_file", "attach_file", "open_file",
-     "wait_download"}
+     "wait_download", "click_at", "type_at"}
 )  # fmt: skip
 OPEN_DIALOG_WAIT_S = 6.0  # an app's Open dialog may take a moment to appear
 WINDOW_WAIT_S = 10.0  # how long a just-launched app may take to show its window
@@ -352,6 +352,21 @@ class DesktopSession:
 
         return await self.uia.run(alive)
 
+    async def window_rect(self) -> tuple[int, int, int, int] | None:
+        """The working window on screen (left, top, right, bottom), for a screenshot."""
+        window = await self.current()
+        if window is None:
+            return None
+
+        def rect() -> tuple[int, int, int, int] | None:
+            try:
+                r = window_root(window).BoundingRectangle
+                return (r.left, r.top, r.right, r.bottom) if r.width() > 0 else None
+            except Exception:
+                return None
+
+        return await self.uia.run(rect)
+
     def location(self) -> str:
         return f"app://{self.window.exe}" if self.window else "app://none"
 
@@ -482,6 +497,13 @@ class DesktopExecutor:
         self._last_step = time.time()
         if kind == "attach_file":
             return await self._attach(action, what)
+        if kind in ("click_at", "type_at"):  # a box picked on a screenshot: its screen position
+            x, y = int(a["x"]), int(a["y"])
+            await self.session.uia.run(_click_point, x, y)
+            if kind == "type_at":
+                await asyncio.to_thread(self.keyboard.type, str(a.get("text", "")))
+                return ok(f"Clicked {what} and typed")
+            return ok(f"Clicked {what}")
         # the agent waits for the window to settle before it looks again — no wait here
         no_element = a.get("element") is None
         if (
@@ -673,6 +695,12 @@ def _file_name_box(window: Window | None) -> Any:
     except Exception:  # the dialog is closing
         return None
     return None
+
+
+def _click_point(x: int, y: int) -> None:
+    import uiautomation as auto
+
+    auto.Click(x, y)
 
 
 def _focus_is_password() -> bool:

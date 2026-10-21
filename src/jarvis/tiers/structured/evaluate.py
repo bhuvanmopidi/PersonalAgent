@@ -36,12 +36,14 @@ from jarvis.safety.policy import SafetyPolicy
 from jarvis.tiers.instant.apps import AppLauncher, load_aliases
 from jarvis.tiers.structured.agent import AgentOutcome, BrowserAgent, TaskAgent, default_trace_dir
 from jarvis.tiers.structured.surface import DesktopSurface
+from jarvis.tiers.vision.eyes import Eyes
 
 TASKS_PATH = PROJECT_ROOT / "evals" / "agent_tasks.yaml"
 SITES = PROJECT_ROOT / "evals" / "sites" / "agent"
 TEST_APP = PROJECT_ROOT / "evals" / "apps" / "testapp.ps1"
 TEST_APP_TITLE = "Jarvis Test App"
 TEST_FILES = PROJECT_ROOT / "evals" / "files"
+EYES = Eyes()  # one detector for the whole run (loaded once, on first use)
 
 
 def task_folders(task: AgentTask) -> tuple[Path, Path]:
@@ -171,7 +173,7 @@ async def run_desktop_task(task: AgentTask, settings: Settings) -> TaskResult:
         runner = ActionRunner(policy, desktop, confirmer, annotate=FileResolver([files]).annotate)
         planners = build_agent_planners(settings, Connectivity(probe=lambda: True))
         agent = TaskAgent(planners, {"desktop": DesktopSurface(session)}, runner.run_action,
-                          settings.agent, trace_dir=default_trace_dir())  # fmt: skip
+                          settings.agent, trace_dir=default_trace_dir(), eyes=EYES)  # fmt: skip
         outcome = await agent.run(task.goal, "desktop")
 
         checks = task.success
@@ -215,7 +217,7 @@ async def run_task(browser: Any, task: AgentTask, settings: Settings) -> TaskRes
     runner = ActionRunner(policy, executor, confirmer, annotate=annotate, order_reader=reader)
     executor.captcha.escalate = runner.run_action
     agent = BrowserAgent(planners, executor, runner.run_action, settings.agent,
-                         trace_dir=default_trace_dir())  # fmt: skip
+                         trace_dir=default_trace_dir(), eyes=EYES)  # fmt: skip
     outcome = await agent.run(task.goal)
 
     page = executor.agent_page or page

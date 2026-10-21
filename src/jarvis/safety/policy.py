@@ -83,6 +83,7 @@ class SafetyRules(BaseModel):
     checkout_free_kinds: list[str] = Field(default_factory=list)
     # typing into / choosing in a field with one of these labels: always the user's (RED)
     secret_fields: list[str] = Field(default_factory=list)
+    label_required_kinds: list[str] = Field(default_factory=list)  # blank label → confirm
 
 
 _KEY_ALIASES = {"control": "ctrl", "escape": "esc", "return": "enter", "del": "delete",
@@ -171,8 +172,14 @@ class SafetyPolicy:
                 risk = level
                 reasons.append(f"target matches '{keyword}' ({level.name})")
 
+        # a screenshot click that can't say what it clicks: never silent
+        unlabelled = action.kind in self.rules.label_required_kinds and not action.target.strip()
+        if unlabelled and risk < RiskLevel.YELLOW:
+            risk = RiskLevel.YELLOW
+            reasons.append("a screen click without a readable label (YELLOW)")
+
         # card number / CVV / UPI fields: never typed by the agent, whatever the page
-        if action.kind in ("type_text", "select_option") and risk < RiskLevel.RED:
+        if action.kind in ("type_text", "select_option", "type_at") and risk < RiskLevel.RED:
             hit = next((p.pattern for p in self._secret_fields if p.search(action.target)), None)
             if hit is not None:
                 risk = RiskLevel.RED

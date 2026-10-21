@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><title>PhoneKart - Apple iPhone 17 (Black, 256 GB)</title>
+<style>
+  body { font-family: sans-serif; margin: 24px; }
+  .bar { display: flex; gap: 16px; margin-top: 30px; }
+  /* like modern shop pages: "buttons" that are plain styled boxes; the click is handled higher up */
+  .pill { padding: 14px 28px; border-radius: 8px; font-weight: bold; color: #fff; user-select: none; }
+  .cart { background: #ff9f00; } .buy { background: #fb641b; }
+</style></head>
+<body>
+  <h1>Apple iPhone 17 (Black, 256 GB)</h1>
+  <p>₹84,999 · In stock</p>
+  <div class="bar" id="bar"><div class="pill cart">Add to cart</div><div class="pill buy">Buy now</div></div>
+<script>
+  document.getElementById("bar").addEventListener("click", (e) => {
+    const t = e.target.textContent.trim();
+    const q = "qty=1&c=black&item=" + encodeURIComponent("Apple iPhone 17 256 GB") + "&price=84999";
+    if (t === "Add to cart") location.href = "store-cart.html?" + q;
+    if (t === "Buy now") location.href = "checkout/review.html?" + q;
+  });
+</script>
+</body></html>

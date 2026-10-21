@@ -49,6 +49,7 @@ from jarvis.tiers.instant.mapper import to_action
 from jarvis.tiers.instant.system import Brightness, Volume
 from jarvis.tiers.structured.agent import TaskAgent, default_trace_dir
 from jarvis.tiers.structured.surface import BrowserSurface, DesktopSurface, Surface, SurfaceName
+from jarvis.tiers.vision.eyes import Eyes
 from jarvis.voice.audio import SoundDeviceSink
 from jarvis.voice.speaker import Speaker
 from jarvis.voice.tts import create_engine
@@ -141,7 +142,7 @@ class Agent:
                 surfaces["browser"] = BrowserSurface(browser)
             task_agent = TaskAgent(
                 build_agent_planners(settings, llm.connectivity), surfaces, runner.run_action,
-                settings.agent, trace_dir=default_trace_dir(),
+                settings.agent, trace_dir=default_trace_dir(), eyes=Eyes(),
             )  # fmt: skip
         return cls(
             rules, runner, kill, speaker, launcher, session,

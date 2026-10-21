@@ -8,7 +8,7 @@ from typing import Any
 from playwright.async_api import Browser
 from test_agent_loop import ScriptPlanner, browser, el, make, step  # noqa: F401
 
-from jarvis.tiers.structured.schema import AgentAction
+from jarvis.tiers.structured.schema import AgentAction, AgentStep
 
 
 def executor_of(agent: Any) -> Any:
@@ -132,3 +132,14 @@ async def test_a_short_named_control_keeps_its_surroundings(browser: Browser) ->
     await page.goto(site("store-cart.html") + "?qty=2")
     snap = await observe(page)
     assert snap.render()  # renders with any context
+
+
+async def test_the_agents_plan_is_shown_back_next_step(browser: Browser) -> None:  # noqa: F811
+    first = AgentStep(thought="…", plan=["open the product — now", "add to cart — next"],
+                      blocker="none yet", status="continue",
+                      actions=[AgentAction(op="scroll", text="down")])  # fmt: skip
+    planner = ScriptPlanner(lambda p: first, lambda p: step("done", "ok"))
+    agent, _, _ = await make(browser, "newtab.html", planner)
+    await agent.run("x")
+    assert "Your plan so far:\n- open the product — now\n- add to cart — next" in planner.prompts[1]
+    assert "Blocker you noted last time: none yet" in planner.prompts[1]

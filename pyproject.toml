@@ -3,15 +3,18 @@ name = "jarvis-agent"
 version = "0.1.0"
 description = "Voice-controlled computer-use agent for Windows"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "anthropic>=1.15.0",
     "faster-whisper>=1.2.1",
+    "huggingface-hub>=2.2.0",
+    "mss>=10.2.0",
     "numpy>=2.5.4",
-    "nvidia-cublas-cu12>=12.9.2.10 ; sys_platform == 'win32'",
+    "nvidia-cublas-cu12>=12.9.1.4 ; sys_platform == 'win32'",
     "ollama>=0.6.3",
     "openai>=3.35.1",
     "openwakeword>=0.4.0",
+    "pillow>=13.0.0",
     "piper-tts>=1.8.0",
     "playwright>=1.64.0",
     "psutil>=7.2.2",
@@ -23,7 +26,10 @@ dependencies = [
     "rapidfuzz>=3.14.6",
     "screen-brightness-control>=0.27.2",
     "sounddevice>=0.5.6",
+    "torch==2.8.0",
+    "torchvision==0.23.0",
     "uiautomation>=2.0.29",
+    "ultralytics>=8.4.183",
 ]
 
 [project.scripts]
@@ -71,3 +77,13 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = ["desktop: touches the real desktop (launches apps, changes volume); run with -m desktop"]
 addopts = "-m 'not desktop'"
+
+# PyTorch with CUDA for the vision tier (OmniParser on the GPU) — from PyTorch's own index
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu129" }
+torchvision = { index = "pytorch-cu129" }

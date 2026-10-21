@@ -368,3 +368,21 @@ async def test_page_commands_scroll_the_current_tab(session: HeadlessSession) ->
     assert await page.locator("#end").is_visible()
     await runner.run_action(Action(kind="browser_nav", target="scroll_top"))
     assert await page.evaluate(scroll_y) == 0
+
+
+async def test_scrolling_moves_an_inner_panel_like_a_chat_app(session: HeadlessSession) -> None:
+    """ChatGPT / Gmail style: the page never scrolls, only a panel — the wheel scrolls that."""
+    from pathlib import Path
+
+    runner, *_ = make(session)
+    page = await session.new_page()
+    site = Path(__file__).parents[1] / "evals" / "sites" / "agent" / "chat-panel.html"
+    await page.goto(site.as_uri())
+    panel = "() => document.getElementById('chat').scrollTop"
+    down = await runner.run_action(Action(kind="browser_nav", target="scroll_down"))
+    assert down.observation == "Scrolled down" and await page.evaluate(panel) > 0
+    await runner.run_action(Action(kind="browser_nav", target="scroll_bottom"))
+    at_end = await runner.run_action(Action(kind="browser_nav", target="scroll_down"))
+    assert at_end.observation.startswith("Nothing moved")  # honest at the end
+    up = await runner.run_action(Action(kind="browser_nav", target="scroll_top"))
+    assert up.ok and await page.evaluate(panel) == 0

@@ -5,6 +5,7 @@
 | [architecture.md](architecture.md) | How the whole system fits together, and what is built so far |
 | [safety.md](safety.md) | Safety layer reference: risk levels, rules, confirmations, kill switch, redaction |
 | [development.md](development.md) | Setup, commands, project layout, conventions |
+| [refinements.md](refinements.md) | Small improvements found in testing, to do later |
 | [phases/](phases/) | One doc per build phase: what was built, how, and why |
 
 ## Phases
@@ -22,5 +23,6 @@
 | 11.2 | **General desktop agent** — any Windows app via UI Automation; Spotify is just a task | ✅ Done | [phase-11.2-desktop.md](phases/phase-11.2-desktop.md) |
 | 11.3 | **Files in and out** — attach / upload on any site or app, downloads, open files | ✅ Done | [phase-11.3-files.md](phases/phase-11.3-files.md) |
 | 11.4 | **Checkout guard** — any shop: the order summary is read off the page word for word, read back, placed only on your yes | ✅ Done | [phase-11.4-checkout.md](phases/phase-11.4-checkout.md) |
+| 15 | **Vision** — when text isn't enough: a screenshot, OmniParser boxes on the GPU, Haiku picks; same safety | ✅ Done | [phase-15-vision.md](phases/phase-15-vision.md) |
 | 10 | Live dictation into any text box (Word, Notepad, Gmail, WhatsApp…) | Planned | — |
 | 12–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |

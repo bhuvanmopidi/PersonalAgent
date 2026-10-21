@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><title>Paint mini app</title></head>
+<body style="margin: 20px; font-family: sans-serif">
+  <!-- everything drawn on a canvas: no text view at all, like games / drawing apps -->
+  <canvas id="c" width="520" height="220" style="border:1px solid #999"></canvas>
+  <p id="out" style="font-size:20px"></p>
+<script>
+  const c = document.getElementById("c"), g = c.getContext("2d");
+  const btns = [["Circle", 30], ["Square", 200], ["Star", 370]];
+  g.font = "bold 22px sans-serif";
+  for (const [name, x] of btns) {
+    g.fillStyle = "#2563eb"; g.fillRect(x, 80, 120, 56);
+    g.fillStyle = "#fff"; g.fillText(name, x + 22, 116);
+  }
+  c.addEventListener("click", (e) => {
+    const r = c.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    for (const [name, bx] of btns)
+      if (x >= bx && x <= bx + 120 && y >= 80 && y <= 136) document.getElementById("out").textContent = "You picked: " + name;
+  });
+</script>
+</body></html>

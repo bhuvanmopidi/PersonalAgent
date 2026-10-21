@@ -266,7 +266,14 @@ class ScriptPlanner:
         self.prompts: list[str] = []
         self.systems: list[str] = []
 
-    async def decide(self, system: str, user: str, schema: Any = None, max_tokens: int = 0) -> Any:
+    async def decide(
+        self,
+        system: str,
+        user: str,
+        schema: Any = None,
+        max_tokens: int = 0,
+        image: bytes | None = None,
+    ) -> Any:
         from jarvis.planner.llm import LLMReply, Usage
 
         self.systems.append(system)

@@ -8,9 +8,10 @@
   const q = new URLSearchParams(location.search);
   const qty = q.get("qty") || "1", colour = q.get("c") || "Bold Black";
   const name = colour[0].toUpperCase() + colour.slice(1);
-  document.getElementById("line").textContent = "boAt Airdopes 141 (" + name + ") — Qty " + qty;
+  document.getElementById("line").textContent = (q.get("item") || "boAt Airdopes 141") + " (" + name + ") — Qty " + qty;
   document.getElementById("go").addEventListener("click", () => {
-    location.href = "checkout/review.html?qty=" + qty + "&c=" + encodeURIComponent(colour);
+    location.href = "checkout/review.html?" + new URLSearchParams({qty, c: colour,
+      item: q.get("item") || "", price: q.get("price") || ""}).toString();
   });
 </script>
 </body></html>
