@@ -24,5 +24,6 @@
 | 11.3 | **Files in and out** — attach / upload on any site or app, downloads, open files | ✅ Done | [phase-11.3-files.md](phases/phase-11.3-files.md) |
 | 11.4 | **Checkout guard** — any shop: the order summary is read off the page word for word, read back, placed only on your yes | ✅ Done | [phase-11.4-checkout.md](phases/phase-11.4-checkout.md) |
 | 15 | **Vision** — when text isn't enough: a screenshot, OmniParser boxes on the GPU, Haiku picks; same safety | ✅ Done | [phase-15-vision.md](phases/phase-15-vision.md) |
+| 12 | **Skills** — a task that worked is learned automatically; the next one of its kind is replayed in seconds with no model call per step, same safety | ✅ Done | [phase-12-skills.md](phases/phase-12-skills.md) |
 | 10 | Live dictation into any text box (Word, Notepad, Gmail, WhatsApp…) | Planned | — |
-| 12–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |
+| 13–16 | See roadmap in [../CLAUDE.md](../CLAUDE.md#10-build-roadmap-phases) (includes 11b shell commands, 14b learned risk classifier) | Planned | — |

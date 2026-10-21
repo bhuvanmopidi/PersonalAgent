@@ -43,6 +43,7 @@ RunAction = Callable[[Action], Coroutine[Any, Any, ActionResult]]
 # the user said no / cancelled, the policy refused, or the window is gone: stop, don't work around
 _STOP = {"user_declined", "user_cancelled", "refused", "browser_closed", "browser_unavailable",
          "admin"}  # fmt: skip
+STOP_ERRORS = _STOP  # the user said no / cancelled, or the policy refused: never work around it
 _KIND = {
     "click": "click", "double_click": "double_click", "type": "type_text", "press": "press_key",
     "select": "select_option", "scroll": "scroll", "find": "find", "navigate": "navigate",
@@ -76,6 +77,21 @@ PAGE_CHANGING = {"click", "double_click", "navigate", "back", "press", "open_app
 # scrolling again and again usually means looking for something that isn't there
 SCROLL_HINT = 3  # in a row → remind the planner of find / another way
 SCROLL_STOP = 6  # in a row → stop
+
+
+@dataclass
+class RunStep:
+    """One step of a run, by what it acted on (for learning a skill)."""
+
+    op: str
+    tag: str = ""
+    name: str = ""
+    text: str = ""
+    key: str = ""
+    url: str = ""
+    ok: bool = True
+    kind: str = ""
+    flags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -335,6 +351,8 @@ class TaskAgent:
     ) -> None:
         self.planners = planners
         self.eyes = eyes  # the vision tier: a screenshot when text isn't enough (None = text only)
+        self.last_run: list[RunStep] = []  # the last run's steps — a skill is learned from them
+        self.last_where: SurfaceName = "browser"
         self.surfaces = surfaces
         self.run_action = run_action  # ActionRunner.run_action — every step is risk-checked
         self.settings = settings
@@ -343,6 +361,7 @@ class TaskAgent:
 
     async def run(self, goal: str, where: SurfaceName = "browser") -> AgentOutcome:
         surface = self.surfaces.get(where) or next(iter(self.surfaces.values()))
+        self.last_run, self.last_where = [], surface.name
         started = self.clock()
         history: list[str] = []
         previous: Snapshot | None = None  # the last look, to tell the model what changed
@@ -492,6 +511,13 @@ class TaskAgent:
                     status = f"{status} → now on {_short(surface.location())}"
                 history.append(f"{describe(act, snap.by_id(act.element))} → {status}")
                 trace.action(action, result, snap.by_id(act.element))
+                el = snap.by_id(act.element)
+                self.last_run.append(RunStep(
+                    # a control's name only if there was one (a step's own label isn't a name)
+                    op=act.op, tag=el.tag if el else "", name=el.name if el else "",
+                    text=act.text or "", key=act.key or "", url=act.url or "",
+                    ok=result.ok, kind=action.kind, flags=sorted(action.flags),
+                ))  # fmt: skip
                 scrolls = scrolls + 1 if act.op == "scroll" else 0
                 if scrolls >= SCROLL_STOP:
                     why = "I scrolled through the page again and again without finding what I "

@@ -350,6 +350,22 @@ intents:
     patterns: ['(?:which|what) (?:model|brain|ai) (?:are you using|is this)', 'are you (?:online|offline)']
     action: { kind: llm_status, target: router }
 
+  # ---- learned skills (Phase 12) ----
+  - name: list_skills
+    examples: ["what skills do you have", "what have you learned"]
+    description: "Listing skills"
+    speak: result
+    patterns: ['(?:what|which) skills (?:do you (?:have|know)|have you learn(?:ed|t))', 'list (?:your |the )?skills']
+    action: { kind: list_skills, target: all }
+
+  - name: forget_skill
+    examples: ["forget the spotify skill", "forget how to send the contact form"]
+    slots: {"skill": "words naming the skill"}
+    description: "Forgetting a skill"
+    speak: result
+    patterns: ['forget (?:the |your )?(?P<skill>.+?) skill', 'forget how to (?P<skill>.+)']
+    action: { kind: forget_skill, target: '{skill}' }
+
   # ---- apps (generic — keep last) ----
   - name: close_app
     examples: ["close notepad", "quit spotify"]

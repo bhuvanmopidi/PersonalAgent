@@ -396,7 +396,7 @@ def test_router_decision_is_a_valid_openai_strict_schema() -> None:
     from openai.lib._pydantic import to_strict_json_schema
 
     schema = to_strict_json_schema(RouterDecision)
-    assert set(schema["required"]) == {"kind", "intent", "slots", "text", "goal", "where"}
+    assert set(schema["required"]) == {"kind", "intent", "slots", "text", "goal", "where", "skill"}
     assert schema["additionalProperties"] is False
     assert '"default"' not in json.dumps(schema)  # strict mode rejects defaults
 

@@ -67,8 +67,16 @@ class LLMRouter:
         # changed at runtime by "use claude" / "use the local model"
         self.online_provider: ProviderName = online_provider
         self.system = catalog.system_prompt()
+        self.skills: Callable[[], str] | None = None  # the learned skills, listed for the model
+        self.skill_slots: Callable[[str], set[str] | None] | None = None  # a skill's slot names
         self._clock = clock
         self._down: dict[str, tuple[float, str]] = {}  # provider → (skip until, why)
+
+    def system_now(self) -> str:
+        """The instructions + commands, then the skills learned so far (changes only when a skill
+        is learned or dropped, so the prompt cache keeps working)."""
+        extra = self.skills() if self.skills is not None else ""
+        return f"{self.system}\n\n{extra}" if extra else self.system
 
     async def order(self) -> list[str]:
         if not await self.connectivity.online():
@@ -112,13 +120,13 @@ class LLMRouter:
     async def _ask(
         self, provider: LLMProvider, user: str, text: str
     ) -> tuple[LLMReply, Intent | None, Usage]:
-        reply = await provider.decide(self.system, user)
+        reply = await provider.decide(self.system_now(), user)
         intent, problem = self._validate(reply.decision, text)
         usage = reply.usage
         if problem:
             log.info("llm %s answer invalid (%s) — retrying once", provider.name, problem)
             retry = f"{user}\n\nYour previous answer was invalid: {problem} Answer again."
-            reply = await provider.decide(self.system, retry)
+            reply = await provider.decide(self.system_now(), retry)
             usage = _add(usage, reply.usage)
             intent, problem = self._validate(reply.decision, text)
             if problem:
@@ -130,4 +138,13 @@ class LLMRouter:
     def _validate(self, decision: RouterDecision, text: str) -> tuple[Intent | None, str | None]:
         if decision.kind == "run_intent":
             return self.catalog.to_intent(decision, text)
+        if decision.kind == "task" and decision.skill and self.skill_slots is not None:
+            needed = self.skill_slots(decision.skill)
+            if needed is None:
+                decision.skill = None  # not a listed skill: the agent does it
+            else:
+                missing = sorted(needed - set(decision.slot_dict()))
+                if missing:
+                    return None, (f"the skill {decision.skill} needs its slots filled: "
+                                  f"{', '.join(missing)}.")  # fmt: skip
         return None, check(decision)

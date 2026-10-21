@@ -11,7 +11,9 @@ tasks, and a vision fallback for everything else. Local-first, with human checkp
 > Files too (11.3): "mail my resume to …" finds the file, attaches it, and the Send question names it.
 > Shopping too (11.4): before placing an order it reads the summary off the page and asks you.
 > Vision too (15): when the text view isn't enough, it looks at the screen (OmniParser on the GPU).
-> Next: skills (speed), memory, live dictation, shell commands — generic abilities.
+> Skills (12): a task that worked is learned automatically; the next one of its kind ("play Shape
+> of You on Spotify") is replayed in a few seconds without asking the AI at each step.
+> Next: memory, live dictation, shell commands — generic abilities.
 > Docs: [docs/](docs/README.md)
 
 ## Setup

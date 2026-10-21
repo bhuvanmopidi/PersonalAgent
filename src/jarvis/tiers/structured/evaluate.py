@@ -73,6 +73,10 @@ class AgentTask(BaseModel):
     files: list[str] = Field(default_factory=list)  # from evals/files: the task's "user folders"
     answers: list[bool] = Field(default_factory=list)
     success: dict[str, Any] = Field(default_factory=dict)
+    # skills (Phase 12): after the task works, learn it, then do this variant by REPLAY — the
+    # real router must pick the skill; checked with again_success
+    again: str = ""
+    again_success: dict[str, Any] = Field(default_factory=dict)
 
 
 def launch_test_app(title: str = TEST_APP_TITLE) -> subprocess.Popen[bytes]:
@@ -129,6 +133,44 @@ def _status(outcome: AgentOutcome) -> str:
     if outcome.ok:
         return "ok"
     return {"user_declined": "declined", "ask": "ask"}.get(outcome.error or "", "fail")
+
+
+async def _replay_variant(
+    task: AgentTask, settings: Settings, agent: Any, page: Any, planners: Any
+) -> list[str]:
+    """Learn the run as a skill (real model), route the variant (real router), replay it."""
+    import tempfile
+
+    from jarvis.agent import build_llm_router
+    from jarvis.router.regex_router import RegexRouter
+    from jarvis.tiers.skills.learner import Learner
+    from jarvis.tiers.skills.replay import Replayer
+    from jarvis.tiers.skills.store import SkillStore
+
+    store = SkillStore(Path(tempfile.mkdtemp(prefix="jarvis-skills-")))
+    skill = await Learner(planners).learn(task.goal, agent.last_run, "browser")
+    if skill is None:
+        return ["no skill was learned from the run"]
+    store.save(skill)
+    router = build_llm_router(settings, RegexRouter.from_yaml())
+    router.skills, router.skill_slots = store.catalog, store.slots_of
+    routed = await router.route(task.again)
+    decision = routed.decision
+    if decision is None or decision.skill != skill.id:
+        got = decision.skill if decision else routed.error
+        return [f"the router didn't pick the skill {skill.id!r} (got {got!r})"]
+    await page.goto(SITES.joinpath(task.start.partition("?")[0]).as_uri())
+    replay = await Replayer(agent.run_action, settings.agent).run(
+        skill, decision.slot_dict(), agent.surfaces["browser"]
+    )
+    print(f"    replay {skill.id}: {'ok' if replay.ok else 'FAILED'} in {replay.ms / 1000:.1f} s "
+          f"— {replay.message}")  # fmt: skip
+    failed = [] if replay.ok else [f"replay failed at step {replay.step}: {replay.message}"]
+    body = await page.inner_text("body")
+    want = task.again_success.get("body_contains")
+    if want and want not in body:
+        failed.append(f"after replay the page lacks {want!r}")
+    return failed
 
 
 def _common_checks(checks: dict[str, Any], outcome: AgentOutcome, prompts: list[str]) -> list[str]:
@@ -246,6 +288,8 @@ async def run_task(browser: Any, task: AgentTask, settings: Settings) -> TaskRes
         box = page.locator(selector).first
         if not page.is_closed() and await box.count() and await box.input_value():
             failed.append(f"something was typed into {selector}")
+    if task.again and not failed:
+        failed += await _replay_variant(task, settings, agent, page, planners)
     await context.close()
 
     model = settings.llm.agent_model

@@ -24,6 +24,7 @@ from jarvis.executors.files import FileResolver, chain
 from jarvis.executors.llm_control import LLM_KINDS, LLMControlExecutor
 from jarvis.executors.os_executor import OSExecutor
 from jarvis.executors.router import KindRouter
+from jarvis.executors.skills import SKILL_KINDS, SkillsExecutor
 from jarvis.models import Action, ActionResult, Intent
 from jarvis.planner.catalog import Catalog
 from jarvis.planner.connectivity import Connectivity
@@ -47,7 +48,11 @@ from jarvis.tiers.instant.apps import AppLauncher, load_aliases, parse_prefer
 from jarvis.tiers.instant.files import FileTools
 from jarvis.tiers.instant.mapper import to_action
 from jarvis.tiers.instant.system import Brightness, Volume
-from jarvis.tiers.structured.agent import TaskAgent, default_trace_dir
+from jarvis.tiers.skills.learner import Learner
+from jarvis.tiers.skills.replay import Replayer
+from jarvis.tiers.skills.service import Skills
+from jarvis.tiers.skills.store import SkillStore
+from jarvis.tiers.structured.agent import STOP_ERRORS, TaskAgent, default_trace_dir
 from jarvis.tiers.structured.surface import BrowserSurface, DesktopSurface, Surface, SurfaceName
 from jarvis.tiers.vision.eyes import Eyes
 from jarvis.voice.audio import SoundDeviceSink
@@ -87,6 +92,7 @@ class Agent:
         mode: Mode = "hybrid",
         route_log: RouteLog | None = None,
         task_agent: TaskAgent | None = None,
+        skills: Skills | None = None,
     ) -> None:
         self.router, self.runner, self.kill = router, runner, kill
         self.speaker = speaker or Speaker(None, SoundDeviceSink())  # silent by default
@@ -96,6 +102,7 @@ class Agent:
         self.mode: Mode = mode
         self.context = SessionContext()
         self.route_log = route_log
+        self.skills = skills  # learned skills (Tier 2): replayed before the agent
         self.task_agent = task_agent  # the general agent: websites (Phase 11), apps (11.2)
 
     @classmethod
@@ -121,8 +128,10 @@ class Agent:
         launcher = AppLauncher(load_aliases())
         system = OSExecutor(launcher, Volume(), Brightness(), FileTools(), url_opener=open_site)
         desktop = DesktopSession()
+        skill_store = SkillStore()
         executor = KindRouter(
-            system, [(BROWSER_KINDS, browser), (LLM_KINDS, LLMControlExecutor(llm))],
+            system, [(BROWSER_KINDS, browser), (LLM_KINDS, LLMControlExecutor(llm)),
+                     (SKILL_KINDS, SkillsExecutor(skill_store))],
             surfaces={"desktop": DesktopExecutor(desktop, launcher)},
         )  # fmt: skip
         # before the safety check: the page an action is on, and the real file it means
@@ -140,13 +149,18 @@ class Agent:
             surfaces: dict[SurfaceName, Surface] = {"desktop": DesktopSurface(desktop)}
             if session is not None:
                 surfaces["browser"] = BrowserSurface(browser)
+            planners = build_agent_planners(settings, llm.connectivity)
             task_agent = TaskAgent(
-                build_agent_planners(settings, llm.connectivity), surfaces, runner.run_action,
+                planners, surfaces, runner.run_action,
                 settings.agent, trace_dir=default_trace_dir(), eyes=Eyes(),
             )  # fmt: skip
+            skills = Skills(skill_store, Learner(planners), Replayer(runner.run_action,
+                                                                    settings.agent))  # fmt: skip
+            llm.skills, llm.skill_slots = skills.store.catalog, skills.store.slots_of
         return cls(
             rules, runner, kill, speaker, launcher, session,
             llm=llm, mode=settings.router.mode, route_log=RouteLog(), task_agent=task_agent,
+            skills=skills if llm is not None else None,
         )  # fmt: skip
 
     async def prewarm(self, launch_browser: bool = False) -> None:
@@ -189,6 +203,8 @@ class Agent:
 
     async def close(self) -> None:
         self.speaker.stop()
+        if self.skills is not None:
+            await self.skills.settle()  # let a skill being learned finish saving
         if self.browser:
             await self.browser.close()
 
@@ -238,7 +254,8 @@ class Agent:
         decision = routed.decision if routed else None
         if intent is None and decision is not None and decision.kind == "task":
             where: SurfaceName = decision.where or "browser"
-            outcome = await self._run_task(text, decision.goal or text, route, route_ms, where)
+            outcome = await self._run_task(text, decision.goal or text, route, route_ms, where,
+                                           decision.skill, decision.slot_dict())  # fmt: skip
         elif intent is None:
             outcome = await self._reply_without_acting(text, routed, route, route_ms)
         else:
@@ -247,7 +264,14 @@ class Agent:
         return outcome
 
     async def _run_task(
-        self, text: str, goal: str, route: str, route_ms: float, where: SurfaceName = "browser"
+        self,
+        text: str,
+        goal: str,
+        route: str,
+        route_ms: float,
+        where: SurfaceName = "browser",
+        skill_id: str | None = None,
+        slots: dict[str, str] | None = None,
     ) -> Outcome:
         """No single command does it: the general agent works it out on the page or in the app."""
         task = Intent(name="task", args={"goal": goal, "where": where}, source="llm")
@@ -261,10 +285,9 @@ class Agent:
         else:
             await self.speaker.say("Working on it.")
             try:
-                done = await self.kill.guard(self.task_agent.run(goal, where))
-                reply = done.message
-                result = ActionResult(ok=done.ok, error=done.error, observation=reply,
-                                      duration_ms=done.ms)  # fmt: skip
+                reply, result = await self.kill.guard(
+                    self._skill_or_agent(goal, where, skill_id, slots or {})
+                )
             except Killed as exc:
                 self.speaker.stop()
                 reply = str(exc)
@@ -275,6 +298,34 @@ class Agent:
         if result.error not in _SILENT_ERRORS:
             await self.speaker.say(reply)
         return Outcome(text, task, None, result, route_ms, route=route, reply=reply)
+
+    async def _skill_or_agent(
+        self, goal: str, where: SurfaceName, skill_id: str | None, slots: dict[str, str]
+    ) -> tuple[str, ActionResult]:
+        """A learned skill if one fits (fast, no model per step); else — or if it fails part-way —
+        the agent, from the current screen. A run that worked is learned (in the background)."""
+        assert self.task_agent is not None
+        skill = self.skills.store.get(skill_id) if self.skills and skill_id else None
+        surface = self.task_agent.surfaces.get(skill.where if skill else where)
+        note = ""
+        if skill is not None and surface is not None and self.skills is not None:
+            replay = await self.skills.replayer.run(skill, slots, surface)
+            self.skills.store.record(skill.id, replay.ok)
+            log.info("skill %s: %s in %.0f ms (%s)", skill.id, "ok" if replay.ok else "failed",
+                     replay.ms, replay.message)  # fmt: skip
+            if replay.ok or replay.error in STOP_ERRORS:
+                result = ActionResult(ok=replay.ok, error=replay.error, observation=replay.message,
+                                      duration_ms=replay.ms, data={"skill": skill.id})  # fmt: skip
+                return replay.message, result
+            note = (f" (a saved way to do this stopped at step {replay.step}: {replay.message} — "
+                    "carry on from the current screen)")  # fmt: skip
+        done = await self.task_agent.run(goal + note, where)
+        result = ActionResult(ok=done.ok, error=done.error, observation=done.message,
+                              duration_ms=done.ms)  # fmt: skip
+        if done.ok and self.skills is not None:
+            steps, used = list(self.task_agent.last_run), self.task_agent.last_where
+            self.skills.learn_later(goal, steps, used)
+        return done.message, result
 
     async def _reply_without_acting(
         self, text: str, routed: Routed | None, route: str, route_ms: float

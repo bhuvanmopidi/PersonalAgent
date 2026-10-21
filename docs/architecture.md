@@ -37,7 +37,10 @@ Every command tries the fastest tier first and only falls down a tier on failure
 | 3. Structured agent | LLM reads the UI Automation tree or the DOM as text, plans 3–5 actions per call | ~2–5 s |
 | 4. Vision fallback | Screenshot + OmniParser numbered boxes + vision LLM | ~5–15 s |
 
-Successful Tier 3/4 runs are saved as skills, so the next run of the same task uses Tier 2.
+Successful Tier 3/4 runs are saved as skills, so the next run of the same task uses Tier 2
+(Phase 12: [phases/phase-12-skills.md](phases/phase-12-skills.md) — learned with one model call
+and verified, picked by the router, replayed by control type + name; a step that can't be done
+hands over to the agent on the current screen).
 
 ## Core data model (`src/jarvis/models.py`)
 
@@ -171,4 +174,5 @@ Details: [phases/phase-11-agent.md](phases/phase-11-agent.md) (websites),
 | General desktop agent: the same loop in any Windows app via UI Automation (Spotify, Settings, File Explorer, Calculator…); Settings changes confirmed | ✅ Phase 11.2 |
 | Files in and out: attach / upload on any site or app, downloads, open files; secrets never attached | ✅ Phase 11.3 |
 | Checkout guard: before placing an order / paying, the order summary (item, qty, total, address, saved method) is read off the visible page word for word and read back; card / UPI fields are the user's | ✅ Phase 11.4 |
+| Skills (Tier 2): runs that worked learned automatically (verified recipe with slots), chosen by the router, replayed through the same safety layer, agent takes over from the current screen on a miss, retired after 3 failures in a row | ✅ Phase 12 |
 | Generic abilities: live dictation into any text box (10) — Spotify/Gmail/Amazon/Word are only eval tasks; then skills, memory | Planned |

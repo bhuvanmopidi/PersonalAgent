@@ -249,3 +249,19 @@ tasks:
     goal: pick Square in this app
     start: vision-canvas.html
     success: { status: ok, body_contains: "You picked: Square" }
+
+  # ---- skills (Phase 12): do it once with the agent, then a differently worded variant by replay
+  - id: skill_form
+    goal: fill the contact form as Bhuvan from Nepal and send it
+    start: form.html
+    answers: [true, true, true, true]
+    success: { status: ok, url_contains: "thanks.html" }
+    again: please send the contact form for Arjun, who is from Sri Lanka
+    again_success: { body_contains: "Got: Arjun from Sri Lanka" }
+
+  - id: skill_flights
+    goal: search flights from Mumbai to London on 30 October 2026
+    start: travel.html
+    success: { url_contains: "date=2026-10-30", status: ok }
+    again: find me flights from New Delhi to Muscat on 30 October 2026
+    again_success: { body_contains: "Flights from New Delhi to Muscat" }

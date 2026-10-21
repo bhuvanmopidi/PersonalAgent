@@ -169,7 +169,7 @@ PersonalAgent/
 | 11.3 | **Files in and out, anywhere** — done | attach/upload a file on any website (page file input) or app (Windows "Open file" dialog via UIA); find the file by description (existing file search); know where downloads land. Eval: "mail my resume to Arjun" (+ send confirmation) |
 | 11.4 | **Checkout guard, any shop** — done | before any pay / place-order step: read the order summary from the page (item, qty, price, address, payment method) → speak + show → click only after yes (one-tap checkout rule, §5); OTP / UPI PIN / CVV always the user's. Eval: "order boAt Airdopes 141 from Amazon" |
 | 11b | Shell commands | `run_command` kind: PowerShell AST parsing + alias resolution, verb semantics, read-only allowlist → GREEN, else confirm, obfuscation → refuse, source tracking (untrusted screen content never auto), no admin, `-WhatIf` previews, Recycle Bin deletes |
-| 12 | Skills (Tier 2) | learn, replay, retire |
+| 12 | **Skills (Tier 2)** — done | learned automatically from runs that worked (one LLM call, recipe verified against the run), router picks skill + slots, replay by control type + name through ActionRunner (no model per step), agent continues on a miss, retire after 3 fails in a row |
 | 13 | Storage | SQLCipher + DPAPI, sqlite-vec, history |
 | 14 | Router cascade | context resolution, embeddings, classifier, decomposer |
 | 14b | Learned risk classifier | synthetic + public + adversarial + logged data; embeddings baseline → fine-tuned MiniLM (ONNX, <10 ms); optimise ≥99% recall on PAYMENT/RED; raise-only |
