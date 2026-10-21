@@ -35,8 +35,11 @@ log = get_logger(__name__)
 
 AGENT_KINDS = frozenset(
     {"click", "double_click", "type_text", "press_key", "select_option", "scroll", "find",
-     "navigate", "go_back", "wait", "attach_file", "open_file", "wait_download"}
+     "navigate", "go_back", "wait", "attach_file", "open_file", "wait_download",
+     "tab_open", "tab_switch", "tab_close", "private_window"}
 )  # fmt: skip
+MAX_TABS_SHOWN = 8
+_LINK_JS = "el => { const a = el.closest('a[href]'); return a ? a.href : ''; }"
 BROWSER_KINDS = frozenset(
     {"open_url", "youtube_play", "media_key", "browser_nav", "set_ad_policy", *AGENT_KINDS}
 )
@@ -184,6 +187,7 @@ class BrowserExecutor:
         self.downloads: list[Path] = []  # files downloaded in the agent's tab, newest last
         self._watched: set[int] = set()  # tabs whose downloads we save
         self._reported = 0  # downloads already handed to the agent
+        self._opened: set[int] = set()  # tabs Jarvis opened (new tabs, followed pop-ups, private)
         self._saving = 0  # downloads still being written
         self._last_step = time.time()  # when the agent's previous action started
         self.youtube = YouTubeFlow(youtube, asker, announce)
@@ -194,7 +198,13 @@ class BrowserExecutor:
         self._open = opener
 
     async def annotate(self, action: Action) -> Action:
-        """Before the safety check: actions on the current tab get that tab's URL as context."""
+        """Before the safety check: actions on the current tab get that tab's URL as context; a
+        tab the agent would close that Jarvis didn't open gets flagged (the user's own tab)."""
+        if action.kind == "tab_close":
+            tab = self._find_tab(action.target) if action.target else self.agent_page
+            if tab is not None and id(tab) not in self._opened:
+                return action.model_copy(update={"flags": action.flags | {"users_tab"}})
+            return action
         if action.kind not in PAGE_KINDS or self.session is None or action.page_url:
             return action
         page = await pick_active(self.session.open_pages())
@@ -384,6 +394,13 @@ class BrowserExecutor:
         finally:
             self._saving -= 1
 
+    async def visible_text(self) -> str:
+        """The visible text of the agent's tab (no hidden / off-page text), for the order reader."""
+        from jarvis.safety.checkout import MAX_PAGE_CHARS, VISIBLE_TEXT_JS
+
+        page = await self.agent_tab()
+        return str(await page.evaluate(VISIBLE_TEXT_JS, MAX_PAGE_CHARS * 2))
+
     async def _agent_op(self, action: Action) -> ActionResult:
         """One agent step — plus what the page asked or said meanwhile (its own pop-up boxes)."""
         self._dialog_notes = []
@@ -419,18 +436,20 @@ class BrowserExecutor:
                 blocked = await self._covered(loc, what)
                 if blocked is not None:
                     return blocked
-                await loc.click(timeout=ELEMENT_TIMEOUT_MS)
+                before = self._tab_ids(page)
+                await loc.click(timeout=ELEMENT_TIMEOUT_MS)  # the site decides: same tab or new
                 await _settle(page)
-                return ok(f"Clicked {what}")
+                return ok(f"Clicked {what}{await self._follow_new_tab(page, before)}")
             if action.kind == "double_click":
                 if loc is None:
                     return fail("bad_element", "double click needs an element")
                 blocked = await self._covered(loc, what)
                 if blocked is not None:
                     return blocked
+                before = self._tab_ids(page)
                 await loc.dblclick(timeout=ELEMENT_TIMEOUT_MS)
                 await _settle(page)
-                return ok(f"Double-clicked {what}")
+                return ok(f"Double-clicked {what}{await self._follow_new_tab(page, before)}")
             if action.kind == "type_text":
                 if loc is None:
                     return fail("bad_element", "type needs an element")
@@ -451,17 +470,32 @@ class BrowserExecutor:
                 return ok(f"Typed into {what}")
             if action.kind == "press_key":
                 key = str(a.get("key") or "Enter")
+                before = self._tab_ids(page)
                 if loc is not None:
                     await loc.press(key, timeout=ELEMENT_TIMEOUT_MS)
                 else:
                     await page.keyboard.press(key)
                 await _settle(page)
-                return ok(f"Pressed {key}")
+                return ok(f"Pressed {key}{await self._follow_new_tab(page, before)}")
+            if action.kind in ("tab_open", "tab_switch", "tab_close", "private_window"):
+                return await self._tabs_op(page, loc, action, what)
             if action.kind == "select_option":
                 if loc is None:
                     return fail("bad_element", "select needs an element")
-                await loc.select_option(label=str(a.get("text", "")), timeout=ELEMENT_TIMEOUT_MS)
-                return ok(f"Selected {a.get('text')!r} in {what}")
+                wanted = str(a.get("text", "")).strip()
+                choices = [c.strip() for c in await loc.evaluate(
+                    "el => el.options ? [...el.options].map(o => o.text) : []")]  # fmt: skip
+                exact = [c for c in choices if c.lower() == wanted.lower()]
+                partial = [c for c in choices if wanted.lower() in c.lower()]
+                pick = exact or partial
+                if choices and len(pick) != 1:
+                    listed = ", ".join(pick or choices)[:200]
+                    why = "several options match" if pick else "no option matches"
+                    return fail("ambiguous_option" if pick else "no_option",
+                                f'{why} "{wanted}" in {what}: {listed}')  # fmt: skip
+                await loc.select_option(label=pick[0] if pick else wanted,
+                                        timeout=ELEMENT_TIMEOUT_MS)  # fmt: skip
+                return ok(f"Selected {pick[0] if pick else wanted!r} in {what}")
             if action.kind == "scroll":
                 up = str(a.get("direction", "down")).lower() == "up"
                 await page.evaluate(
@@ -550,6 +584,136 @@ class BrowserExecutor:
             return False
         await boxes.first.set_input_files(str(path))
         return True
+
+    # ---- tabs: see them, follow new ones, open / switch / close when asked -------------------
+
+    def _all_tabs(self) -> list[Page]:
+        """Every open Jarvis Chrome tab (the private window's too), oldest first."""
+        tabs: list[Page] = []
+        pages = self.session.open_pages() if self.session is not None else []
+        contexts = {id(p.context): p.context for p in pages}
+        if self.agent_page is not None and not self.agent_page.is_closed():
+            contexts.setdefault(id(self.agent_page.context), self.agent_page.context)
+        for context in contexts.values():
+            tabs += [p for p in context.pages if not p.is_closed()]
+        return tabs
+
+    def _tab_ids(self, page: Page) -> set[int]:
+        return {id(p) for p in page.context.pages}
+
+    async def tab_list(self) -> list[str]:
+        """For the snapshot: "[1] Flipkart search — flipkart.com (this one)"."""
+        lines = []
+        for n, tab in enumerate(self._all_tabs()[:MAX_TABS_SHOWN], 1):
+            try:
+                title = (await tab.title()) or "(no title)"
+            except Exception:
+                title = "(loading)"
+            host = tab.url.split("/")[2] if "://" in tab.url else tab.url
+            private = " (private)" if self._is_private(tab) else ""
+            this = " (this one)" if tab is self.agent_page else ""
+            lines.append(f"[{n}] {title[:60]} — {host}{private}{this}")
+        return lines
+
+    def _is_private(self, tab: Page) -> bool:
+        pages = self.session.open_pages() if self.session is not None else []
+        return bool(pages) and tab.context is not pages[0].context
+
+    def _find_tab(self, text: str) -> Page | None:
+        tabs = self._all_tabs()
+        t = text.strip().strip("[]#").lower()
+        if t.isdigit() and 1 <= int(t) <= len(tabs):
+            return tabs[int(t) - 1]
+        for tab in reversed(tabs):  # newest first: "the airdopes tab"
+            if t and t in tab.url.lower():
+                return tab
+        return None
+
+    async def _find_tab_by_title(self, text: str) -> Page | None:
+        tab = self._find_tab(text)
+        if tab is not None:
+            return tab
+        t = text.strip().lower()
+        for candidate in reversed(self._all_tabs()):
+            with contextlib.suppress(Exception):
+                if t and t in (await candidate.title()).lower():
+                    return candidate
+        return None
+
+    async def _use_tab(self, tab: Page) -> str:
+        self.agent_page = tab
+        await tab.bring_to_front()
+        with contextlib.suppress(Exception):
+            await tab.wait_for_load_state("domcontentloaded", timeout=NAV_TIMEOUT_MS)
+        await _settle(tab)
+        try:
+            return await tab.title() or tab.url
+        except Exception:
+            return tab.url
+
+    async def _follow_new_tab(self, page: Page, before: set[int]) -> str:
+        """The action opened a tab (a link meant for a new tab, a pop-up): like Chrome bringing a
+        new foreground tab forward, work there — and say so."""
+        new = [p for p in page.context.pages if id(p) not in before and not p.is_closed()]
+        if not new:
+            return ""
+        tab = new[-1]
+        self._opened.add(id(tab))
+        title = await self._use_tab(tab)
+        return f" — it opened a new tab: {title}"
+
+    async def _tabs_op(
+        self, page: Page, loc: Locator | None, action: Action, what: str
+    ) -> ActionResult:
+        kind, target = action.kind, action.target.strip()
+        if kind == "tab_open":
+            url = target
+            if loc is not None:
+                url = str(await loc.evaluate(_LINK_JS)) or ""
+                if not url:  # a button, not a link: Ctrl+click, as a person would
+                    before = self._tab_ids(page)
+                    await loc.click(modifiers=["Control"], timeout=ELEMENT_TIMEOUT_MS)
+                    await _settle(page)
+                    note = await self._follow_new_tab(page, before)
+                    return ok(f"Opened {what} in a new tab{note}") if note else fail(
+                        "no_new_tab", f"{what} didn't open a new tab")  # fmt: skip
+            if not url.startswith(("http://", "https://", "file://")):
+                return fail("bad_url", "a new tab needs a link or a full http(s) address")
+            tab = await page.context.new_page()
+            self._opened.add(id(tab))
+            await tab.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+            return ok(f"Opened a new tab: {await self._use_tab(tab)}")
+        if kind == "private_window":
+            if not target.startswith(("http://", "https://", "file://")):
+                return fail("bad_url", "a private window needs a full http(s) address")
+            browser = page.context.browser
+            if browser is None:
+                return fail("no_private", "A private window isn't available here")
+            context = await browser.new_context()  # no cookies, no sign-ins, nothing kept
+            tab = await context.new_page()
+            self._opened.add(id(tab))
+            await tab.goto(target, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+            title = await self._use_tab(tab)
+            return ok(f"Opened a private window (not signed in, nothing is kept): {title}")
+        if kind == "tab_switch":
+            found = await self._find_tab_by_title(target)
+            if found is None:
+                return fail("no_tab", f'No open tab matches "{target}"')
+            return ok(f"Switched to the tab: {await self._use_tab(found)}")
+        # tab_close
+        closing = await self._find_tab_by_title(target) if target else page
+        if closing is None:
+            return fail("no_tab", f'No open tab matches "{target}"')
+        tab = closing
+        tabs = self._all_tabs()
+        if len(tabs) <= 1:
+            return fail("last_tab", "That's the only tab — I'll leave it open")
+        title = await tab.title()
+        await tab.close()
+        if tab is self.agent_page or self.agent_page is None or self.agent_page.is_closed():
+            rest = [t for t in self._all_tabs() if not t.is_closed()]
+            await self._use_tab(rest[-1])
+        return ok(f"Closed the tab: {title}")
 
     async def _covered(self, loc: Locator, what: str) -> ActionResult | None:
         """Fail at once — with the reason — if something covers the element (no 3 s wait)."""

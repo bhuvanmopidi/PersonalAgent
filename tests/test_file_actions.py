@@ -230,7 +230,7 @@ async def test_send_reads_back_its_own_compose_window(browser: Browser, tmp_path
     page = await (await browser.new_context()).new_page()
     await page.goto(site("two-drafts.html"))
     snap = await observe(page)
-    sends = [e for e in snap.elements if e.name == "Send"]
+    sends = [e for e in snap.elements if e.name.startswith("Send (")]  # "Send (1 of 2)" …
     old, new = sends[0], sends[1]
     assert "no attachments" in read_back(snap, new) and "Resume_Old" not in read_back(snap, new)
     assert 'To recipients: "arjun@example.com"' in read_back(snap, new)

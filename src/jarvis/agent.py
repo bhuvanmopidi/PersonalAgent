@@ -38,6 +38,7 @@ from jarvis.planner.router import LLMRouter, Routed
 from jarvis.router.context import SessionContext
 from jarvis.router.log import RouteLog
 from jarvis.router.regex_router import RegexRouter
+from jarvis.safety.checkout import OrderReader
 from jarvis.safety.confirm import Confirmer, SpokenConfirmer, TerminalConfirmer
 from jarvis.safety.killswitch import Killed, KillSwitch
 from jarvis.safety.policy import SafetyPolicy
@@ -125,7 +126,12 @@ class Agent:
         )  # fmt: skip
         # before the safety check: the page an action is on, and the real file it means
         annotate = chain(browser.annotate, FileResolver().annotate)
-        runner = ActionRunner(policy, executor, spoken, annotate=annotate)
+        reader = None
+        if llm is not None:  # pay / place-order steps: the order summary is read off the page
+            reader = OrderReader(
+                build_agent_planners(settings, llm.connectivity), browser.visible_text
+            )
+        runner = ActionRunner(policy, executor, spoken, annotate=annotate, order_reader=reader)
         browser.captcha.escalate = runner.run_action  # CAPTCHA handoffs go through the runner too
         kill = KillSwitch(settings.hotkeys.kill)
         task_agent = None
@@ -262,6 +268,9 @@ class Agent:
                 self.speaker.stop()
                 reply = str(exc)
                 result = ActionResult(ok=False, error="killed", observation=reply)
+            except BrowserUnavailable as exc:  # last resort: never end the repl over it
+                reply = f"I can't use the Jarvis Chrome window: {exc}"
+                result = ActionResult(ok=False, error="browser_unavailable", observation=reply)
         if result.error not in _SILENT_ERRORS:
             await self.speaker.say(reply)
         return Outcome(text, task, None, result, route_ms, route=route, reply=reply)

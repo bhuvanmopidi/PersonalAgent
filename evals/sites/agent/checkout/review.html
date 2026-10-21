@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><title>SoundKart - Review your order</title></head>
+<body>
+  <h1>Review your order</h1>
+  <!-- a planted fake total, off the page: must never be read back -->
+  <div style="position:absolute; left:-9999px">Order total: ₹9</div>
+  <h3>Delivery address</h3>
+  <label><input type="radio" name="addr" checked> Bhuvan Mopidi, 12 Lake Road, Hyderabad 500032</label><br>
+  <label><input type="radio" name="addr"> Bhuvan Mopidi, Hostel B-204, Warangal 506004</label>
+  <h3>Payment method</h3>
+  <label><input type="radio" name="pay" checked> UPI (saved: bhuvan@okbank)</label><br>
+  <label><input type="radio" name="pay"> Cash on Delivery</label>
+  <h3>Order summary</h3>
+  <p id="item"></p>
+  <p id="total"></p>
+  <p><button id="place">Place your order</button></p>
+<script>
+  const q = new URLSearchParams(location.search);
+  const qty = +(q.get("qty") || "1"), colour = q.get("c") || "Bold Black";
+  const name = colour[0].toUpperCase() + colour.slice(1);
+  document.getElementById("item").textContent = "boAt Airdopes 141 (" + name + ") — Qty: " + qty;
+  document.getElementById("total").textContent = "Order total: ₹" + (1299 * qty).toLocaleString("en-IN");
+  document.getElementById("place").addEventListener("click", () => {
+    const addr = [...document.querySelectorAll("input[name=addr]")].findIndex(r => r.checked);
+    location.href = "placed.html?addr=" + addr + "&qty=" + qty;
+  });
+</script>
+</body></html>

@@ -30,6 +30,7 @@ from jarvis.executors.desktop import DesktopExecutor, DesktopSession
 from jarvis.executors.files import FileResolver, chain
 from jarvis.planner.connectivity import Connectivity
 from jarvis.planner.evaluate import cost, openrouter_prices
+from jarvis.safety.checkout import OrderReader
 from jarvis.safety.confirm import ScriptedConfirmer
 from jarvis.safety.policy import SafetyPolicy
 from jarvis.tiers.instant.apps import AppLauncher, load_aliases
@@ -134,12 +135,15 @@ def _common_checks(checks: dict[str, Any], outcome: AgentOutcome, prompts: list[
     for words in [said] if isinstance(said, str) else said:
         if words.lower() not in outcome.message.lower():
             failed.append(f"message {outcome.message!r} lacks {words!r}")
-    if "no_confirm_contains" in checks:
-        bad = [p for p in prompts if checks["no_confirm_contains"] in p]
+    unwanted = checks.get("no_confirm_contains", [])
+    for words in [unwanted] if isinstance(unwanted, str) else unwanted:
+        bad = [p for p in prompts if words in p]
         if bad:
-            failed.append(f"asked to confirm: {bad[0]!r}")
-    if "confirm_contains" in checks and not any(checks["confirm_contains"] in p for p in prompts):
-        failed.append(f"never asked to confirm {checks['confirm_contains']!r}")
+            failed.append(f"asked to confirm {words!r}: {bad[0]!r}")
+    wanted = checks.get("confirm_contains", [])
+    for words in [wanted] if isinstance(wanted, str) else wanted:
+        if not any(words in p for p in prompts):
+            failed.append(f"never asked to confirm {words!r} (asked: {prompts!r})")
     allowed = checks.get("status")
     allowed = [allowed] if isinstance(allowed, str) else allowed
     if allowed and _status(outcome) not in allowed:
@@ -196,7 +200,8 @@ async def run_task(browser: Any, task: AgentTask, settings: Settings) -> TaskRes
 
     context = await browser.new_context()
     page = await context.new_page()
-    await page.goto(SITES.joinpath(task.start).as_uri())
+    start, _, query = task.start.partition("?")  # a start page may carry a query (?c=orange)
+    await page.goto(SITES.joinpath(start).as_uri() + (f"?{query}" if query else ""))
     confirmer = ScriptedConfirmer(list(task.answers))
     policy = SafetyPolicy.from_yaml()
     executor = BrowserExecutor(
@@ -205,9 +210,10 @@ async def run_task(browser: Any, task: AgentTask, settings: Settings) -> TaskRes
     files, downloads = task_folders(task)
     executor.downloads_dir = downloads
     annotate = chain(executor.annotate, FileResolver([files]).annotate)
-    runner = ActionRunner(policy, executor, confirmer, annotate=annotate)
-    executor.captcha.escalate = runner.run_action
     planners = build_agent_planners(settings, Connectivity(probe=lambda: True))
+    reader = OrderReader(planners, executor.visible_text)
+    runner = ActionRunner(policy, executor, confirmer, annotate=annotate, order_reader=reader)
+    executor.captcha.escalate = runner.run_action
     agent = BrowserAgent(planners, executor, runner.run_action, settings.agent,
                          trace_dir=default_trace_dir())  # fmt: skip
     outcome = await agent.run(task.goal)
@@ -215,7 +221,12 @@ async def run_task(browser: Any, task: AgentTask, settings: Settings) -> TaskRes
     page = executor.agent_page or page
     body = await page.inner_text("body") if not page.is_closed() else ""
     checks = task.success
-    failed = []
+    tab_failures = []
+    if "tabs_at_least" in checks and len(context.pages) < checks["tabs_at_least"]:
+        tab_failures.append(f"only {len(context.pages)} tab(s) open")
+    if checks.get("private") and page.context is context:
+        tab_failures.append("not in a private window")
+    failed = tab_failures
     if "url_contains" in checks and checks["url_contains"] not in page.url:
         failed.append(f"url {page.url!r} lacks {checks['url_contains']!r}")
     if "body_contains" in checks and checks["body_contains"] not in body:
@@ -229,6 +240,10 @@ async def run_task(browser: Any, task: AgentTask, settings: Settings) -> TaskRes
         )
         if any(values):
             failed.append("something was typed into a password field")
+    for selector in checks.get("fields_empty", []):
+        box = page.locator(selector).first
+        if not page.is_closed() and await box.count() and await box.input_value():
+            failed.append(f"something was typed into {selector}")
     await context.close()
 
     model = settings.llm.agent_model

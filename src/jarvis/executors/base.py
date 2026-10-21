@@ -30,11 +30,14 @@ class ActionRunner:
         executor: Executor,
         confirmer: Confirmer,
         annotate: Annotator | None = None,
+        order_reader: Annotator | None = None,
     ) -> None:
         self.policy = policy
         self.executor = executor
         self.confirmer = confirmer
         self.annotate = annotate  # adds context the policy needs (e.g. the current page URL)
+        # a pay / place-order step without its details: read them off the page (Phase 11.4)
+        self.order_reader = order_reader
 
     async def run_action(self, action: Action) -> ActionResult:
         with timed(f"action:{action.kind}") as t:
@@ -45,6 +48,9 @@ class ActionRunner:
         if self.annotate is not None:
             action = await self.annotate(action)
         check = self.policy.check(action)
+        if check.decision == Decision.REFUSE and check.missing and self.order_reader is not None:
+            action = await self.order_reader(action)
+            check = self.policy.check(action)  # the policy still decides — with what was read
         log.info(
             "policy kind=%s target=%r risk=%s decision=%s reasons=%s",
             action.kind,
@@ -54,6 +60,19 @@ class ActionRunner:
             check.reasons,
         )
 
+        if check.decision == Decision.REFUSE and check.missing:
+            # a step that may place an order, without all five details on screen: never done —
+            # but the agent may go where they are shown (the checkout page) and try there
+            why = (
+                f"Not done: this step may place an order or pay, and I couldn't read the "
+                f"{', '.join(m.replace('_', ' ') for m in check.missing)} on this page"
+            )
+            if action.args.get("order_unverified"):
+                why += f" (not shown word for word: {action.args['order_unverified']})"
+            return ActionResult(ok=False, error="order_details_missing", observation=why + ". "
+                                "Steps that may place an order are done only from a page that "
+                                "shows the full order summary — reach it another way (e.g. the "
+                                "cart, then checkout), or ask the user.")  # fmt: skip
         if check.decision == Decision.REFUSE:
             return ActionResult(ok=False, error="refused", observation="; ".join(check.reasons))
 

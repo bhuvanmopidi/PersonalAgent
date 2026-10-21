@@ -48,13 +48,25 @@ payment_required_fields: [item, quantity, price, address, payment_method]
 
 ## One-tap checkout
 
-The agent may click **Pay** only after you confirm a prompt like:
+The agent may place an order or pay only after you confirm a prompt like:
 
-> Pay Rs 1,299 for boAt Airdopes 141 (qty 1), deliver to Home, using saved HDFC card?
+> "Place your order": boAt Airdopes 141 (Bold Black), quantity 1, total ₹1,299, deliver to Bhuvan
+> Mopidi, 12 Lake Road, Hyderabad 500032, pay with UPI (saved). Should I?
 
-It never stores card numbers, CVV or UPI PIN. OTP, UPI PIN and 3-D Secure are always entered by you
-(they are RED). Using only payment methods already saved on the site is enforced in the shopping
-flows (Phase 6).
+Since Phase 11.4 the five details are **read off the page** by `safety/checkout.py` when the step
+happens: a model copies them from the page's *visible* text (hidden / off-page text is left out),
+and every value must appear **word for word** on the page — anything it can't quote is dropped, and
+a step missing any of the five is **refused** (`order_details_missing`), never guessed. The policy
+makes the decision; the reader only supplies facts.
+
+- Placing / paying is recognised by its label (`place order`, `buy now`, `pay now`, `confirm
+  order`, `complete purchase` …), by checkout / payment-gateway URLs, or by the planner's
+  `payment` hint. Other steps on a checkout page (choose address, delivery, saved method) are free
+  (`checkout_free_kinds`, user's choice).
+- Card number, CVV, expiry, UPI ID / PIN fields (`secret_fields`) are always handed to you.
+- It never stores card numbers, CVV or UPI PIN. OTP, UPI PIN and 3-D Secure are always entered by
+  you (RED). Only payment methods already saved on the site are used (a "new card" form → handed
+  to you).
 
 ## Confirmations (`safety/confirm.py`)
 
@@ -159,6 +171,8 @@ program behind the window (`systemsettings`), so the settings rule can't be dodg
 | Several files match a description | The agent asks which one; never picks |
 | The Send / Submit question | Reads back the button's own form / dialog: recipients, filled fields, attachments or "no attachments" |
 | A step the user confirmed | Never runs a second time in the same task (no double send / order / delete) |
+| Closing a tab Jarvis didn't open (yours) | Asked first (flag `users_tab`) |
+| Private window | Incognito-like: no cookies or sign-ins, nothing kept; URL rules apply as for any page |
 | Escape / Tab / arrow keys | Don't inherit the focused button's label — only Enter / Space press it |
 | The page's own question box (`confirm`, `prompt`, "leave page?") | Asked to the user: *The page asks: "…" — OK?* — never auto-answered (left alone, the browser library would answer Cancel) |
 

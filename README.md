@@ -9,8 +9,8 @@ tasks, and a vision fallback for everything else. Local-first, with human checkp
 > See → Think → Act → Check, with every step safety-checked. Plus voice control, instant commands,
 > and an LLM layer that understands any phrasing.
 > Files too (11.3): "mail my resume to …" finds the file, attaches it, and the Send question names it.
-> Next: 11.4 checkout guard, then skills (speed), memory, live dictation — generic abilities;
-> Amazon / Word are just tasks for them.
+> Shopping too (11.4): before placing an order it reads the summary off the page and asks you.
+> Next: skills (speed), memory, live dictation, shell commands — generic abilities.
 > Docs: [docs/](docs/README.md)
 
 ## Setup

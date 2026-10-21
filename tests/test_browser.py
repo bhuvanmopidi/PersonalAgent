@@ -208,7 +208,9 @@ async def test_checkout_page_raises_risk_of_media_keys(session: HeadlessSession)
     page = await session.new_page()
     await page.goto(url("checkout/pay.html"))
     result = await runner.run_action(Action(kind="media_key", target="pause"))
-    assert result.error == "refused"  # PAYMENT risk from the page, with no payment details
+    assert (
+        result.error == "order_details_missing"
+    )  # PAYMENT risk from the page, with no payment details
 
 
 async def test_never_uses_default_browser_when_chrome_is_down() -> None:

@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><title>SoundKart - boAt Airdopes 141</title></head>
+<body>
+  <h1>boAt Airdopes 141 (Bold Black)</h1>
+  <p>Wireless earbuds, 42 hours playback. Price: ₹1,299</p>
+  <label>Quantity <select id="qty" aria-label="Quantity"><option>1</option><option>2</option><option>3</option></select></label>
+  <p><button id="add">Add to cart</button></p>
+<script>
+  document.getElementById("add").addEventListener("click", () => {
+    location.href = "store-cart.html?qty=" + document.getElementById("qty").value;
+  });
+</script>
+</body></html>

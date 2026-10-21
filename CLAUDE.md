@@ -167,13 +167,13 @@ PersonalAgent/
 | 11 | **General browser agent** (any website) — done | DOM observer, batched See→Think→Act→Check with Claude Haiku via OpenRouter; every step through ActionRunner; **AI risk hint** (raise-only); prompt-injection guard; router hands unmatched requests to it |
 | 11.2 | **General desktop agent** — done | same See→Think→Act→Check loop on any Windows app via UI Automation (the app's controls as text); same safety layer, find, popups, scroll limits. Evals: "play Blinding Lights on Spotify", Settings, File Explorer, Word editing |
 | 11.3 | **Files in and out, anywhere** — done | attach/upload a file on any website (page file input) or app (Windows "Open file" dialog via UIA); find the file by description (existing file search); know where downloads land. Eval: "mail my resume to Arjun" (+ send confirmation) |
-| 11.4 | **Checkout guard, any shop — next** | before any pay / place-order step: read the order summary from the page (item, qty, price, address, payment method) → speak + show → click only after yes (one-tap checkout rule, §5); OTP / UPI PIN / CVV always the user's. Eval: "order boAt Airdopes 141 from Amazon" |
+| 11.4 | **Checkout guard, any shop** — done | before any pay / place-order step: read the order summary from the page (item, qty, price, address, payment method) → speak + show → click only after yes (one-tap checkout rule, §5); OTP / UPI PIN / CVV always the user's. Eval: "order boAt Airdopes 141 from Amazon" |
 | 11b | Shell commands | `run_command` kind: PowerShell AST parsing + alias resolution, verb semantics, read-only allowlist → GREEN, else confirm, obfuscation → refuse, source tracking (untrusted screen content never auto), no admin, `-WhatIf` previews, Recycle Bin deletes |
 | 12 | Skills (Tier 2) | learn, replay, retire |
 | 13 | Storage | SQLCipher + DPAPI, sqlite-vec, history |
 | 14 | Router cascade | context resolution, embeddings, classifier, decomposer |
 | 14b | Learned risk classifier | synthetic + public + adversarial + logged data; embeddings baseline → fine-tuned MiniLM (ONNX, <10 ms); optimise ≥99% recall on PAYMENT/RED; raise-only |
-| 15 | Tier-4 vision | mss + OmniParser + vision LLM |
+| 15 | Tier-4 vision | mss + OmniParser + vision LLM — used when the text view can't make sense of a page (controls that only *look* like buttons, picture-only options such as colour swatches, icons, canvas apps); eval cases from the Flipkart tests |
 | 16 | Eval suite + Tauri UI | ~50 tasks, metrics; **adversarial safety evals** (miss rate per layer: rules vs judge vs classifier vs ensemble); tray app |
 | Later | Indian-language voice, fine-tuned router, fine-tuned UI-grounding model |
 

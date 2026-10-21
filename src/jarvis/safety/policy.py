@@ -78,6 +78,11 @@ class SafetyRules(BaseModel):
     blocked_paths: list[str] = Field(default_factory=list)  # never attached / opened
     program_extensions: list[str] = Field(default_factory=list)  # opening one → confirm
     risky_keys: RiskLists = RiskLists()  # key combos that act at once (send, delete for good)
+    # on a checkout / payment page these steps are free (choose address, delivery, a saved
+    # method) — only one that places the order / pays is gated, by its label or the AI's hint
+    checkout_free_kinds: list[str] = Field(default_factory=list)
+    # typing into / choosing in a field with one of these labels: always the user's (RED)
+    secret_fields: list[str] = Field(default_factory=list)
 
 
 _KEY_ALIASES = {"control": "ctrl", "escape": "esc", "return": "enter", "del": "delete",
@@ -139,6 +144,9 @@ class SafetyPolicy:
             normalize_keys(k): level for level, keys in rules.risky_keys.by_level().items()
             for k in keys
         }  # fmt: skip
+        self._secret_fields = [
+            re.compile(rf"(?<!\w){re.escape(f)}(?!\w)", re.IGNORECASE) for f in rules.secret_fields
+        ]
         self._keyword_patterns = [
             (re.compile(rf"(?<!\w){re.escape(kw)}(?!\w)", re.IGNORECASE), kw, level)
             for level, kws in rules.keywords.by_level().items()
@@ -162,6 +170,13 @@ class SafetyPolicy:
             if check_keywords and level > risk and pattern.search(action.target):
                 risk = level
                 reasons.append(f"target matches '{keyword}' ({level.name})")
+
+        # card number / CVV / UPI fields: never typed by the agent, whatever the page
+        if action.kind in ("type_text", "select_option") and risk < RiskLevel.RED:
+            hit = next((p.pattern for p in self._secret_fields if p.search(action.target)), None)
+            if hit is not None:
+                risk = RiskLevel.RED
+                reasons.append(f"field '{action.target}' is a payment / secret field (RED)")
 
         for flag in action.flags:
             level = self._flag_risk.get(flag, RiskLevel.GREEN)
@@ -196,9 +211,15 @@ class SafetyPolicy:
             urls.append(("url", action.target))
         for what, url in urls:
             match = url_risk(url, self.rules.url_rules)
-            if match and match[0] > risk:
-                risk = match[0]
-                reasons.append(f"{what} matches {match[1]} ({risk.name})")
+            if not match or match[0] <= risk:
+                continue
+            if match[0] == RiskLevel.PAYMENT and action.kind in self.rules.checkout_free_kinds:
+                # an ordinary step on a checkout page (user's choice, 2026-10-19): the placing /
+                # paying one is caught by its label or the planner's hint above, not by the page
+                reasons.append(f"{what} matches {match[1]} (a checkout page — this step is free)")
+                continue
+            risk = match[0]
+            reasons.append(f"{what} matches {match[1]} ({risk.name})")
 
         return risk, reasons
 

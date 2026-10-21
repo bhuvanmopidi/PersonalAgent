@@ -56,7 +56,8 @@ class BrowserSurface:
         page = await self._page()
         snap = await observe(page, max_elements, max_text)
         self._url = page.url
-        return snap
+        # the tab strip too: a tab that opened, or the wrong tab, is visible to the planner
+        return snap.model_copy(update={"tabs": await self.browser.tab_list()})
 
     async def still_there(self, element_id: int) -> bool:
         return await still_there(await self._page(), element_id)

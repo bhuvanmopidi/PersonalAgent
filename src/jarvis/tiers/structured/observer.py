@@ -10,7 +10,7 @@ out — they can't be clicked — and the snapshot says a popup is in the way.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,8 @@ class Element(BaseModel):
     otp: bool = False
     focused: bool = False
     group: int = 0  # the form / dialog it belongs to (0 = none) — see Snapshot.groups
+    context: str = ""  # a short-named control's surrounding text (its card / row / option)
+    options: list[str] = Field(default_factory=list)  # a drop-down's choices, as a person sees them
 
 
 class Snapshot(BaseModel):
@@ -47,6 +49,7 @@ class Snapshot(BaseModel):
     cover: str = ""  # what covers them: the popup's own text
     cover_share: float = 0.0  # how much of the screen that popup takes (0–1)
     windows: list[str] = Field(default_factory=list)  # desktop: the other open app windows
+    tabs: list[str] = Field(default_factory=list)  # browser: the open tabs ("[2] … (this one)")
     # forms / dialogs on the page: group id → its text. A Send / Submit question reads back what
     # is in the SAME group as the button (e.g. one compose window, not another one)
     groups: dict[int, str] = Field(default_factory=dict)
@@ -92,6 +95,10 @@ class Snapshot(BaseModel):
                 parts.append("(one-time code field)")
             if e.focused:
                 parts.append("(focused)")
+            if e.options:
+                parts.append("options: " + " | ".join(e.options))
+            if e.context:
+                parts.append(f'(in: "{e.context}")')
             lines.append(" ".join(parts))
         if not self.elements:
             lines.append("(none)")
@@ -105,6 +112,8 @@ class Snapshot(BaseModel):
             )
         if self.more_below:
             lines.append("(more content below — scroll to see it)")
+        if len(self.tabs) > 1:
+            lines.append("Tabs: " + " · ".join(self.tabs))
         if self.windows:
             lines.append("Other open windows: " + " | ".join(self.windows))
         if self.folders:
@@ -199,6 +208,17 @@ _SNAPSHOT_JS = r"""([attr, maxEls, maxText]) => {
     if (!groupIds.has(box)) groupIds.set(box, groupIds.size + 1);
     return groupIds.get(box);
   };
+  // a control with a short / generic name ("Image", "Add", "Out of stock") is told with the
+  // text of the smallest container around it that says more (its card, row or option)
+  const contextOf = (el, name) => {
+    if (name.length > 20) return '';
+    let box = el.parentElement;
+    for (let i = 0; i < 5 && box && box !== document.body; i++, box = box.parentElement) {
+      const t = clean(box.innerText);
+      if (t.length > name.length + 3) return t.length <= 90 ? t : '';
+    }
+    return '';
+  };
   const out = []; let id = 0; let truncated = false; let covered = 0;
   for (const el of document.querySelectorAll('body *')) {
     const semantic = el.matches(sel);
@@ -226,6 +246,9 @@ _SNAPSHOT_JS = r"""([attr, maxEls, maxText]) => {
         : (el.getAttribute('aria-checked') ? el.getAttribute('aria-checked') === 'true' : null),
       disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
       password, otp, focused: document.activeElement === el, group: groupOf(el),
+      context: contextOf(el, clean(labelFor(el))),
+      options: tag === 'select' ? [...el.options].map(o => cut(clean(o.text), 50))
+        .filter(Boolean).slice(0, 15) : [],
     });
   }
   const headings = [...document.querySelectorAll('h1, h2, h3')].filter(visible)
@@ -302,9 +325,94 @@ async def dom_size(page: Page) -> int:
         return -1
 
 
+def what_changed(before: Snapshot | None, after: Snapshot, limit: int = 8) -> list[str]:
+    """What a person would notice between two looks: another address or tab, controls that came
+    or went or changed state, new text. One mechanism for "did my action work?" everywhere."""
+    import difflib
+
+    if before is None:
+        return []
+    changes: list[str] = []
+    if after.url != before.url:
+        changes.append(f"the address is now {after.url[:120]}")
+    if after.title != before.title:
+        changes.append(f'the title is now "{after.title[:80]}"')
+    old_tabs = {t.split(" — ")[0].split("] ", 1)[-1] for t in before.tabs}
+    new_tabs = {t.split(" — ")[0].split("] ", 1)[-1] for t in after.tabs}
+    changes += [f'a tab opened: "{t}"' for t in sorted(new_tabs - old_tabs)]
+    changes += [f'a tab closed: "{t}"' for t in sorted(old_tabs - new_tabs)]
+
+    def key(e: Element) -> str:
+        return f"{e.tag} {e.name}"
+
+    old = {key(e): e for e in before.elements}
+    new = {key(e): e for e in after.elements}
+    appeared = [k for k in new if k not in old]
+    gone = [k for k in old if k not in new]
+    if appeared:
+        shown = ", ".join(f'"{new[k].name}"' for k in appeared[:5] if new[k].name)
+        more = f" (+{len(appeared) - 5} more)" if len(appeared) > 5 else ""
+        if shown:
+            changes.append(f"appeared: {shown}{more}")
+    if gone:
+        shown = ", ".join(f'"{old[k].name}"' for k in gone[:5] if old[k].name)
+        more = f" (+{len(gone) - 5} more)" if len(gone) > 5 else ""
+        if shown:
+            changes.append(f"gone: {shown}{more}")
+    for k in new.keys() & old.keys():
+        a, b = old[k], new[k]
+        if a.value != b.value and not b.password:
+            changes.append(f'"{b.name}" now shows "{b.value}"')
+        if a.checked != b.checked and b.checked is not None:
+            changes.append(
+                f'"{b.name}" is now {"checked / selected" if b.checked else "unchecked"}'
+            )
+        if a.disabled != b.disabled:
+            changes.append(f'"{b.name}" is now {"disabled" if b.disabled else "enabled"}')
+    old_words, new_words = before.text.split(), after.text.split()
+    matcher = difflib.SequenceMatcher(None, old_words, new_words, autojunk=False)
+    added = [" ".join(new_words[j1:j2]) for op, _, _, j1, j2 in matcher.get_opcodes()
+             if op in ("insert", "replace") and j2 - j1 >= 2]  # fmt: skip
+    for piece in added[:3]:
+        changes.append(f'new text: "{piece[:100]}"')
+    if not changes:
+        return ["nothing visible changed"]
+    return changes[:limit]
+
+
+def number_lookalikes(elements: list[dict[str, Any]]) -> None:
+    """Several controls with the same short name ("Image", "Icon", "") — e.g. colour swatches —
+    become "Image (1 of 3)" … so the agent can tell them apart and remember which it tried."""
+    counts: dict[str, int] = {}
+    for e in elements:
+        counts[e.get("name", "")] = counts.get(e.get("name", ""), 0) + 1
+    seen: dict[str, int] = {}
+    for e in elements:
+        name = e.get("name", "")
+        if counts[name] < 2 or len(name) > 15 or e.get("tag") in ("input", "textarea", "select"):
+            continue
+        seen[name] = seen.get(name, 0) + 1
+        e["name"] = f"{name or 'unnamed'} ({seen[name]} of {counts[name]})"
+
+
 async def observe(page: Page, max_elements: int = 120, max_text_chars: int = 1500) -> Snapshot:
+    from jarvis.safety.checkout import VISIBLE_TEXT_JS
+
     await settle(page)
     raw = await page.evaluate(_SNAPSHOT_JS, [ID_ATTR, max_elements, max_text_chars])
+    number_lookalikes(raw.get("elements", []))
+    # the page text as a person sees it — hidden / off-page text (a planted "total ₹9") left out
+    try:
+        visible = str(await page.evaluate(VISIBLE_TEXT_JS, max_text_chars * 3))
+    except Exception:  # navigating meanwhile: keep the plain text
+        visible = ""
+    if visible:
+        for said in raw.get("announcements", []):
+            visible = visible.replace(said, " ")
+        visible = " ".join(visible.split())
+        raw["text"] = (
+            visible[: max_text_chars - 1] + "…" if len(visible) > max_text_chars else visible
+        )
     return Snapshot.model_validate(raw)
 
 

@@ -170,4 +170,5 @@ Details: [phases/phase-11-agent.md](phases/phase-11-agent.md) (websites),
 | General browser agent: any website, See→Think→Act→Check, every step safety-checked, `jarvis eval-agent` | ✅ Phase 11 |
 | General desktop agent: the same loop in any Windows app via UI Automation (Spotify, Settings, File Explorer, Calculator…); Settings changes confirmed | ✅ Phase 11.2 |
 | Files in and out: attach / upload on any site or app, downloads, open files; secrets never attached | ✅ Phase 11.3 |
-| Generic abilities: checkout guard for any shop (11.4), live dictation into any text box (10) — Spotify/Gmail/Amazon/Word are only eval tasks; then skills, memory | Planned |
+| Checkout guard: before placing an order / paying, the order summary (item, qty, total, address, saved method) is read off the visible page word for word and read back; card / UPI fields are the user's | ✅ Phase 11.4 |
+| Generic abilities: live dictation into any text box (10) — Spotify/Gmail/Amazon/Word are only eval tasks; then skills, memory | Planned |

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 Op = Literal["click", "double_click", "type", "press", "select", "scroll", "find", "navigate",
              "back", "wait", "open_app", "switch", "check_file", "attach", "wait_download",
-             "open_file"]  # fmt: skip
+             "open_file", "new_tab", "switch_tab", "close_tab", "private_window"]  # fmt: skip
 RiskHint = Literal["none", "irreversible", "payment", "credentials"]
 Status = Literal["continue", "done", "ask", "fail"]
 

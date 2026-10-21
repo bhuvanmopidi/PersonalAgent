@@ -199,7 +199,8 @@ class BrowserSession:
         if await asyncio.to_thread(jarvis_chrome_processes, profile):
             # e.g. still open from `jarvis browser setup`, which runs without remote control
             raise BrowserUnavailable(
-                "the Jarvis Chrome window is open without remote control — close it and try again"
+                "the window from `jarvis browser setup` is still open — close it (your sign-ins "
+                "are kept), then ask again"
             )
         port = self.settings.cdp_port
         log.info("launching Jarvis Chrome (port %d, profile %s)", port, profile)

@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><title>QuickMail - Contacts</title></head>
+<body>
+  <h1>Send a note</h1>
+  <label>To <select id="to" aria-label="Recipient">
+    <option value="">Choose…</option>
+    <option>Arjun Kumar (arjun.k@example.com)</option>
+    <option>Arjun Rao (arjun.rao@example.com)</option>
+    <option>Meera Iyer (meera@example.com)</option>
+  </select></label>
+  <label>Note <input id="note" aria-label="Note"></label>
+  <button onclick="location.href='sent.html?to='+encodeURIComponent(document.getElementById('to').value)">Send</button>
+</body></html>

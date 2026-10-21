@@ -36,7 +36,9 @@ async def test_annotator_runs_before_the_policy() -> None:
 
     runner = ActionRunner(SafetyPolicy.from_yaml(), executor, confirmer, annotate=on_checkout_page)
     result = await runner.run_action(Action(kind="media_key", target="pause"))
-    assert result.error == "refused" and executor.calls == []  # PAYMENT from the page context
+    assert (
+        result.error == "order_details_missing" and executor.calls == []
+    )  # PAYMENT from the page context
 
 
 async def test_green_runs_without_asking() -> None:
@@ -71,7 +73,9 @@ async def test_payment_prompt_reads_back_everything(full_payment: dict[str, Any]
 async def test_incomplete_payment_refused_without_asking() -> None:
     runner, executor, confirmer = make(answers=[True])
     result = await runner.run_action(Action(kind="pay", args={"price": "Rs 99"}))
-    assert result.error == "refused" and executor.calls == [] and confirmer.prompts == []
+    assert (
+        result.error == "order_details_missing" and executor.calls == [] and confirmer.prompts == []
+    )
 
 
 @pytest.mark.parametrize(("done", "ok"), [(True, True), (False, False)])

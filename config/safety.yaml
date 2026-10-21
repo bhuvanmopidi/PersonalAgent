@@ -8,7 +8,7 @@ kinds:
      lock_screen, hotkey, type_text, click, scroll, read, search, play_media, wait,
      youtube_play, media_key, browser_nav, set_ad_policy, set_llm_provider, llm_status,
      press_key, select_option, find, navigate, go_back, double_click, switch_window, check_file,
-     attach_file, open_file, wait_download]
+     attach_file, open_file, wait_download, tab_open, tab_switch, tab_close, private_window]
   # change_system_setting: confirmed, not handed over (user's choice, 2026-10-19)
   yellow: [send, submit_form, delete_file, move_file, place_order, change_system_setting]
   payment: [pay]
@@ -21,15 +21,20 @@ keyword_kinds: [click, hotkey, press_key, submit_form]
 # Matched as whole words/phrases (case-insensitive).
 keywords:
   yellow:
-    [send, submit, delete, remove, place order, buy now, confirm order, confirm, permanently,
+    [send, submit, delete, remove, confirm, permanently,
      cancel membership, cancel subscription, cancel plan, unsubscribe, deactivate, close account,
      delete account, transfer, finish cancellation, uninstall, reset]
-  payment: [pay now, proceed to pay, place your order and pay, complete payment, make payment]
+  # placing an order / paying (Phase 11.4): read back item, quantity, total, address, saved
+  # payment method from the page, then a yes — or refused if they aren't all shown
+  payment: [pay now, proceed to pay, place your order and pay, complete payment, make payment,
+            place order, place your order, buy now, confirm order, complete order,
+            complete purchase, submit order, confirm and pay, pay securely, checkout and pay]
   red: [password, otp, one-time password, upi pin, cvv, sign in, log in, verify you are human, captcha]
 
 flags:
   # agent_*: the agent planner's own risk hint for a step (an AI risk judge) — can only raise risk
-  yellow: [agent_irreversible]
+  # users_tab: closing a tab Jarvis didn't open (the user's own) — ask first
+  yellow: [agent_irreversible, users_tab]
   payment: [agent_payment]
   red: [password_field, otp_field, captcha_detected, agent_credentials]
 
@@ -48,13 +53,23 @@ blocked_paths:
 # Opening one of these runs a program: only after a yes (user's choice).
 program_extensions: [.exe, .msi, .bat, .cmd, .ps1, .vbs, .js, .jse, .wsf, .scr, .com, .lnk, .reg]
 
+# One-tap checkout (Phase 11.4, user's choice): on a checkout / payment page these agent steps
+# don't need a question (pick the address, delivery slot, a saved payment method) — the step that
+# places the order or pays is still gated by its label (payment keywords) or the planner's hint.
+checkout_free_kinds: [click, double_click, select_option, type_text, scroll, find, wait, go_back,
+                      navigate, press_key, check_file, tab_open, tab_switch, tab_close,
+                      private_window]
+# Never typed or chosen by the agent: the user enters these (whole words, case-insensitive).
+secret_fields: [card number, card no, cvv, cvc, security code, expiry, expiration, valid thru,
+                name on card, upi id, upi pin, vpa, atm pin, ipin, net banking password]
+
 # Key presses that act at once in many apps — confirm (matched on the normalised combo).
 risky_keys:
   yellow: [ctrl+enter, shift+delete, ctrl+shift+delete, alt+s]
 
 # Page context: where a browser action happens raises its risk (never lowers it).
 # Checked against action.page_url, and against the target for url_kinds (the target IS a URL).
-url_kinds: [open_url, navigate]
+url_kinds: [open_url, navigate, tab_open, private_window]
 url_rules:
   payment:
     path_keywords: [/checkout, /payment, /payments, /pay/, /buy/, /gp/buy, /placeorder, /order/confirm]

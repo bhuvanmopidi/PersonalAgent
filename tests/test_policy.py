@@ -40,7 +40,7 @@ def test_unknown_kind_defaults_to_confirm(policy: SafetyPolicy) -> None:
     [
         ("Send", RiskLevel.YELLOW),
         ("Delete forever", RiskLevel.YELLOW),
-        ("Buy Now", RiskLevel.YELLOW),
+        ("Buy Now", RiskLevel.PAYMENT),  # may place an order at once (one-click buying)
         ("Proceed to Pay", RiskLevel.PAYMENT),
         ("Sign in", RiskLevel.RED),
         ("Verify you are human", RiskLevel.RED),

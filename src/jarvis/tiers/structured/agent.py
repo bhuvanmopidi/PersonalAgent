@@ -21,12 +21,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from jarvis.config import AgentSettings
+from jarvis.executors.browser_session import BrowserUnavailable
 from jarvis.models import Action, ActionResult
 from jarvis.paths import data_dir
 from jarvis.planner.llm import LLMProvider, LLMUnavailable, Usage
 from jarvis.safety.redact import redact
 from jarvis.telemetry.logging import get_logger
-from jarvis.tiers.structured.observer import Element, Snapshot
+from jarvis.tiers.structured.observer import Element, Snapshot, what_changed
 from jarvis.tiers.structured.prompts import DESKTOP_SYSTEM, SYSTEM, user_prompt
 from jarvis.tiers.structured.schema import MAX_ACTIONS, AgentAction, AgentStep
 from jarvis.tiers.structured.surface import BrowserSurface, Surface, SurfaceName
@@ -46,13 +47,16 @@ _KIND = {
     "select": "select_option", "scroll": "scroll", "find": "find", "navigate": "navigate",
     "back": "go_back", "wait": "wait", "open_app": "launch_app", "switch": "switch_window",
     "check_file": "check_file", "attach": "attach_file", "wait_download": "wait_download",
-    "open_file": "open_file",
+    "open_file": "open_file", "new_tab": "tab_open", "switch_tab": "tab_switch",
+    "close_tab": "tab_close", "private_window": "private_window",
 }  # fmt: skip
+_TAB_OPS = {"new_tab", "switch_tab", "close_tab", "private_window"}  # browser only
+_WEB = ("http://", "https://", "file://")
 _FILE_OPS = {"attach", "wait_download", "open_file"}  # both surfaces: files in and out
 # what each surface can do (the planner is told; anything else is rejected before it runs)
 OPS: dict[SurfaceName, frozenset[str]] = {
     "browser": frozenset({"click", "double_click", "type", "press", "select", "scroll", "find",
-                          "navigate", "back", "wait", *_FILE_OPS}),
+                          "navigate", "back", "wait", *_FILE_OPS, *_TAB_OPS}),
     "desktop": frozenset({"click", "double_click", "type", "press", "select", "scroll", "find",
                           "back", "wait", "open_app", "switch", "check_file", *_FILE_OPS}),
 }  # fmt: skip
@@ -101,6 +105,9 @@ def describe(act: AgentAction, el: Element | None) -> str:
         return f'attach "{act.text or ""}"' + (f" with {target}" if target else "")
     if act.op == "wait_download":
         return "wait for the download"
+    if act.op in _TAB_OPS:
+        what = act.url or act.text or (target if target else "")
+        return f"{act.op.replace('_', ' ')} {what}".strip()
     return f"{act.op.replace('_', ' ')} {target}".strip()
 
 
@@ -108,6 +115,21 @@ def describe(act: AgentAction, el: Element | None) -> str:
 # '… its box.», ».replace("»","")' — models sometimes append these; they must not be spoken
 # '<' — '… App.</br>'; a quote then a comma — "… Nepal.','risk_hint':'none'" (JSON leaking in)
 _DEBRIS = re.compile(r"""([.!?])\s*(?:[\]}»«`=#\\<]|['"]\s*,).*$""", re.S)
+
+
+def _pages_seen(visits: dict[str, list[Any]]) -> list[str]:
+    """Pages looked at in this task, with how often — "(seen 2×)" means you've been there before."""
+    lines = []
+    for url, (title, times) in list(visits.items())[-10:]:
+        again = f" (seen {times}×)" if times > 1 else ""
+        lines.append(f"{title[:60]} — {_short(url)}{again}")
+    return lines
+
+
+def _short(location: str) -> str:
+    """An address short enough for the history, keeping what tells pages apart (path + query)."""
+    rest = location.split("://", 1)[-1]
+    return rest if len(rest) <= 110 else rest[:70] + "…" + rest[-35:]
 
 
 def tidy(message: str) -> str:
@@ -193,6 +215,12 @@ def to_action(
         return None, f"{act.op} needs the file in text (a full path or a description)"
     if act.op == "navigate" and not (act.url or "").startswith(("http://", "https://")):
         return None, "navigate needs a full http(s) URL"
+    if act.op == "private_window" and not (act.url or act.text or "").startswith(_WEB):
+        return None, "private_window needs a full http(s) URL"
+    if act.op == "new_tab" and act.element is None and not (act.url or "").startswith(_WEB):
+        return None, "new_tab needs a link [number] or a full http(s) URL"
+    if act.op == "switch_tab" and not (act.text or "").strip():
+        return None, "switch_tab needs the tab's [number], title or site in text"
     if act.op in ("press", "type") and el is None:  # keys go to whatever is focused: judge that
         el = next((e for e in snap.elements if e.focused), None)
     if act.op == "press" and el is not None and not _activates(act.key or "Enter"):
@@ -225,6 +253,10 @@ def to_action(
         args["surface"] = "desktop"  # routed to the desktop executor
     if act.op == "navigate":
         target = act.url or ""
+    elif act.op in ("new_tab", "private_window"):
+        target = act.url or act.text or (el.name if el else "")
+    elif act.op in ("switch_tab", "close_tab"):
+        target = (act.text or "").strip()
     elif act.op in ("open_app", "switch", "check_file", "attach", "open_file"):
         target = (
             act.text or ""
@@ -272,6 +304,9 @@ class TaskAgent:
         surface = self.surfaces.get(where) or next(iter(self.surfaces.values()))
         started = self.clock()
         history: list[str] = []
+        previous: Snapshot | None = None  # the last look, to tell the model what changed
+        visits: dict[str, list[Any]] = {}  # page → [title, times seen] — to stop re-checking
+        thoughts: list[str] = []  # the planner's notes ("Airdopes 141 at ₹1,199") — for a pay step
         seen: set[tuple[Any, ...]] = set()
         failures: dict[tuple[str, str, str], int] = {}  # same action, same reason → how often
         scrolls = 0  # scroll actions in a row
@@ -294,11 +329,17 @@ class TaskAgent:
             if self.clock() - started > self.settings.time_budget_s:
                 return outcome(False, "That's taking too long, so I stopped.", "time_budget", step)
 
-            blocked = await surface.blocked()
-            if blocked is not None:
-                return outcome(False, blocked.observation or "A human check needs you.",
-                               blocked.error or "captcha", step)  # fmt: skip
-            snap = await surface.observe(self.settings.max_elements, self.settings.max_text_chars)
+            try:
+                blocked = await surface.blocked()
+                if blocked is not None:
+                    return outcome(False, blocked.observation or "A human check needs you.",
+                                   blocked.error or "captcha", step)  # fmt: skip
+                snap = await surface.observe(
+                    self.settings.max_elements, self.settings.max_text_chars
+                )
+            except BrowserUnavailable as exc:
+                return outcome(False, f"I can't use the Jarvis Chrome window: {exc}",
+                               "browser_unavailable", step)  # fmt: skip
             # screen-reader announcements: only NEW ones ("Message sent" after our Send) — what a
             # site announced before this task or in an earlier look is no evidence of anything
             fresh = [a for a in snap.announcements if a not in heard] if step > 1 else []
@@ -307,13 +348,19 @@ class TaskAgent:
             where_before = surface.location()
 
             try:
-                plan, step_usage = await self._plan(goal, step, history, snap, surface.name)
+                plan, step_usage = await self._plan(goal, step, history, snap, surface.name,
+                                                    _pages_seen(visits),
+                                                    what_changed(previous, snap))  # fmt: skip
             except LLMUnavailable as exc:
                 return outcome(
                     False, f"I need a cloud model for that, and {exc}.", "no_planner", step
                 )
+            previous = snap
             usage = _add(usage, step_usage)
             trace.step(step, snap, plan)
+            thoughts.append(plan.thought)
+            visit = visits.setdefault(snap.url, [snap.title, 0])
+            visit[1] += 1
 
             batch = plan.actions[:MAX_ACTIONS]
             for i, act in enumerate(batch):
@@ -343,6 +390,11 @@ class TaskAgent:
                         action = action.model_copy(update={
                             "description": f"{action.description} — {'; '.join(extra)}",
                         })  # fmt: skip
+                    # if this places an order, the order reader checks it against the request
+                    notes = " | ".join(thoughts[-6:])[-900:]
+                    action = action.model_copy(
+                        update={"args": {**action.args, "task": goal, "notes": notes}}
+                    )
                 result = await self.run_action(action)
                 if result.ok and result.data.get("confirmed"):
                     confirmed_done.add((action.kind, action.target))
@@ -363,8 +415,13 @@ class TaskAgent:
                     "page_notes"
                 ):  # the page's own question / notice, and the answer
                     status = f"{status} ({result.data['page_notes']})"
-                if result.ok and act.op in ("find", "open_app", "switch", "check_file", *_FILE_OPS):
+                if result.ok and (
+                    act.op in ("find", "open_app", "switch", "check_file", *_FILE_OPS, *_TAB_OPS)
+                    or "new tab" in result.observation  # a click that opened (and moved to) a tab
+                ):
                     status = f"ok: {result.observation}"
+                if result.ok and surface.location() != loc_before:
+                    status = f"{status} → now on {_short(surface.location())}"
                 history.append(f"{describe(act, snap.by_id(act.element))} → {status}")
                 trace.action(action, result, snap.by_id(act.element))
                 scrolls = scrolls + 1 if act.op == "scroll" else 0
@@ -408,7 +465,8 @@ class TaskAgent:
             # on an unchanged page it's a loop.
             acted_on = tuple(describe(a, snap.by_id(a.element)) for a in plan.actions)
             signature = (snap.fingerprint(), acted_on)
-            if signature in seen:
+            moved_on = surface.location() != where_before  # this time it took us somewhere
+            if signature in seen and not moved_on:
                 return outcome(False, "I'm going round in circles, so I stopped.", "stuck", step)
             seen.add(signature)
 
@@ -417,9 +475,11 @@ class TaskAgent:
 
     async def _plan(
         self, goal: str, step: int, history: list[str], snap: Snapshot,
-        surface: SurfaceName = "browser",
+        surface: SurfaceName = "browser", seen_pages: list[str] | None = None,
+        changed: list[str] | None = None,
     ) -> tuple[AgentStep, Usage]:  # fmt: skip
-        prompt = user_prompt(goal, step, self.settings.max_steps, history, snap)
+        prompt = user_prompt(goal, step, self.settings.max_steps, history, snap,
+                             seen=seen_pages or [], changed=changed or [])  # fmt: skip
         reasons = []
         # the main planner gets a second try (a dropped connection, a malformed reply happen);
         # the others are fallbacks

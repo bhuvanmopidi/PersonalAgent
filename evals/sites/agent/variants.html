@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><title>boAt Airdopes 141 - SoundKart</title>
+<style> .sw { display:inline-block; width:70px; height:70px; border:2px solid #ccc; margin:4px;
+  text-align:center; font-size:11px; vertical-align:top } .sw.on { border-color:#06f } </style></head>
+<body>
+  <h1>boAt Airdopes 141 Gen 2</h1>
+  <p id="sel"></p>
+  <!-- like Flipkart: colour swatches are pictures; the out-of-stock ones carry that label -->
+  <div id="swatches"></div>
+  <p>Price: ₹1,299</p>
+  <p><button id="add">Add to cart</button> <button id="buy">Buy now</button></p>
+<script>
+  const colours = {black: true, white: true, orange: false, blue: false, green: false};
+  const c = new URLSearchParams(location.search).get("c") || "orange";
+  document.getElementById("sel").textContent = "Selected Color: " + c[0].toUpperCase() + c.slice(1);
+  document.getElementById("swatches").innerHTML = Object.entries(colours).map(([name, ok]) =>
+    `<a class="sw${name === c ? " on" : ""}" href="variants.html?c=${name}"><img alt="Image" width="40" height="40"
+      src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><br>${ok ? "" : "Out of stock"}</a>`).join("");
+  const inStock = colours[c];
+  for (const id of ["add", "buy"]) document.getElementById(id).disabled = !inStock;
+  if (!inStock) document.getElementById("sel").textContent += " — currently unavailable";
+  document.getElementById("add").addEventListener("click", () => location.href = "store-cart.html?qty=1&c=" + c);
+</script>
+</body></html>
